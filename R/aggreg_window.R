@@ -9,9 +9,6 @@ library(reshape2)
 library(epiR)
 library(plyr)
 library(stats)
-library(psych)
-library(GGally)
-library(MASS)
 NUC_PER_CODON <- 3
 
 
@@ -59,7 +56,7 @@ per_window_ave <- ddply(.data=collate_dnds, .variables="Window_Start",
                                      Window_AmbigCodonFractn=mean(x$AmbigCodonFractn, na.rm=TRUE),
                                      Window_Err_N_Fractn=mean(x$Err_N_Fractn, na.rm=TRUE),
                                      Window_Err_S_Fractn=mean(x$Err_S_Fractn, na.rm=TRUE)
-                                     )
+                          )
                         })
 collate_dnds <- merge(x=collate_dnds, y=per_window_ave, by="Window_Start", all=TRUE, sort=TRUE)
 
@@ -79,60 +76,31 @@ actual_dnds$CodonSite <- as.numeric(actual_dnds$CodonSite)  # table converts Cod
 
 # Average over windows
 per_codon_ave <- ddply(.data=collate_dnds, .variables="CodonSite", 
-                          .fun=function(x) {                            
-                            hi_syn_x <- x[x$S >=1, ]
-                            hi_subst_x <- x[x$N >=1 & x$S >=1, ]
-                            
-                            data.frame(
-                             aveDnDs=mean(x$dNdS, na.rm=TRUE),
-                             CodonDepth=mean(x$CodonDepth, na.rm=TRUE),
-                             Conserve=mean(x$Conserve, na.rm=TRUE),
-                             Diverge=mean(1-x$Conserve, na.rm=TRUE),
-                             Entropy=mean(x$Entropy, na.rm=TRUE),
-                             Reads=mean(x$Reads, na.rm=TRUE), 
-                             NonSyn=mean(x$N, na.rm=TRUE), 
-                             Syn=mean(x$S, na.rm=TRUE), 
-                             Subst=mean(x$Subst, na.rm=TRUE), 
-                             dN=mean(x$dN, na.rm=TRUE), 
-                             dS=mean(x$dS, na.rm=TRUE), 
-                             dN_minus_dS=mean(x$dN_minus_dS, na.rm=TRUE),
-                             dN_minus_dSWeightByReadsNoLowSubst=weighted.mean(hi_subst_x$dN_minus_dS, hi_subst_x$Reads, na.rm=TRUE),
-                             dNdSWeightBySubst=weighted.mean(x$dNdS, x$Subst, na.rm=TRUE),
-                             dNdSWeightByReads=weighted.mean(x$dNdS, x$Reads, na.rm=TRUE),
-                             dNdSWeightByReadsNoLowSyn=weighted.mean(hi_syn_x$dNdS, hi_syn_x$Reads, na.rm=TRUE),
-                             dNdSWeightByReadsNoLowSubst=weighted.mean(hi_subst_x$dNdS, hi_subst_x$Reads, na.rm=TRUE),
-                             dN_minus_dSWeightByReads=weighted.mean(x$dN_minus_dS, x$Reads, na.rm=TRUE))
-                        })
+                       .fun=function(x) {                            
+                         hi_syn_x <- x[x$S >=1, ]
+                         hi_subst_x <- x[x$N >=1 & x$S >=1, ]
+                         
+                         data.frame(
+                           aveDnDs=mean(x$dNdS, na.rm=TRUE),
+                           CodonDepth=mean(x$CodonDepth, na.rm=TRUE),
+                           Conserve=mean(x$Conserve, na.rm=TRUE),
+                           Diverge=mean(1-x$Conserve, na.rm=TRUE),
+                           Entropy=mean(x$Entropy, na.rm=TRUE),
+                           Reads=mean(x$Reads, na.rm=TRUE), 
+                           NonSyn=mean(x$N, na.rm=TRUE), 
+                           Syn=mean(x$S, na.rm=TRUE), 
+                           Subst=mean(x$Subst, na.rm=TRUE), 
+                           dN=mean(x$dN, na.rm=TRUE), 
+                           dS=mean(x$dS, na.rm=TRUE), 
+                           dN_minus_dS=mean(x$dN_minus_dS, na.rm=TRUE),
+                           dN_minus_dSWeightByReadsNoLowSubst=weighted.mean(hi_subst_x$dN_minus_dS, hi_subst_x$Reads, na.rm=TRUE),
+                           dNdSWeightBySubst=weighted.mean(x$dNdS, x$Subst, na.rm=TRUE),
+                           dNdSWeightByReads=weighted.mean(x$dNdS, x$Reads, na.rm=TRUE),
+                           dNdSWeightByReadsNoLowSyn=weighted.mean(hi_syn_x$dNdS, hi_syn_x$Reads, na.rm=TRUE),
+                           dNdSWeightByReadsNoLowSubst=weighted.mean(hi_subst_x$dNdS, hi_subst_x$Reads, na.rm=TRUE),
+                           dN_minus_dSWeightByReads=weighted.mean(x$dN_minus_dS, x$Reads, na.rm=TRUE))
+                       })
 actual_dnds <- merge(x=actual_dnds, y=per_codon_ave, by="CodonSite", all=TRUE, sort=TRUE)
-
-#+
-# Get average smoothed over multiple sites
-MIN_COLLATE_SITE <- min(collate_dnds$CodonSite)
-MAX_COLLATE_SITE <- max(collate_dnds$CodonSite)
-
-actual_dnds$multisiteAvedNdS <- sapply(actual_dnds$CodonSite, function(site) {
-  mean(collate_dnds[collate_dnds$CodonSite >= (site - SMOOTH_DIST) & collate_dnds$CodonSite <= (site + SMOOTH_DIST), "dNdS"], 
-       na.rm=TRUE)
-})
-
-actual_dnds$multisiteAvedNdSWeightBySubst <- sapply(actual_dnds$CodonSite, function(site) {  
-  set <- collate_dnds[collate_dnds$CodonSite >= (site - SMOOTH_DIST) & 
-                              collate_dnds$CodonSite <= (site + SMOOTH_DIST),]
-  weighted.mean(set$dNdS, set$Subst, na.rm=TRUE)
-})
-
-# Here, we don't calculate the dN/dS ratio until the very end.
-# We are naturally weighting the sites by their number of substitutions
-actual_dnds$multisitedNdSWeightBySubst <- sapply(actual_dnds$CodonSite, function(site) {
-  set <- collate_dnds[collate_dnds$CodonSite >= (site - SMOOTH_DIST) & 
-                        collate_dnds$CodonSite <= (site + SMOOTH_DIST),]
-  total_nonsyn <- sum(set$N, na.rm=TRUE)
-  total_syn <- sum(set$S, na.rm=TRUE)
-  total_exp_nonsyn <- sum(set$EN, na.rm=TRUE)
-  total_exp_syn <- sum(set$ES, na.rm=TRUE)
-  multisite_dnds <- (total_nonsyn * total_exp_syn) / (total_syn * total_exp_nonsyn )
-})
-
 
 #' **Summary Per-Codon Stats (aggregated over windows)**
 #' 
@@ -145,7 +113,7 @@ summary(actual_dnds)
 #'  ==============================
 #'  
 
-# Cols: Observed S Changes  Observed NS Changes  E[S Sites]	E[NS Sites]	Observed S. Prop.	P{S}	dS	dN	dN-dS	P{S leq. observed}	P{S geq. observed}	Scaled dN-dS	dn/ds
+# Cols: Observed S Changes  Observed NS Changes  E[S Sites]  E[NS Sites]	Observed S. Prop.	P{S}	dS	dN	dN-dS	P{S leq. observed}	P{S geq. observed}	Scaled dN-dS	dn/ds
 # Parse the expected dnds filename for it start and end nucleotide positions (1-based)
 expected_dnds <- read.table(EXPECTED_DNDS_FILENAME, header=TRUE, sep="\t")  # Site  Interval	Scaling_factor	Rate_class	Omega
 expected_dnds_start_codon <- (EXPECTED_DNDS_START_NUC_POS %/% 3) + 1
@@ -161,24 +129,6 @@ expected_dnds$Subst <- expected_dnds$S + expected_dnds$N
 if (!all(expected_dnds$CodonSite == actual_dnds$CodonSite)) {
   stop("Expected dN/dS Sites don't line up with Actual dN/dS Sites")
 }
-
-# TODO:  don't need the for loops
-MIN_SITE <- min(expected_dnds$CodonSite)
-MAX_SITE <- max(expected_dnds$CodonSite)
-expected_dnds$MultisiteAveDnDs <- apply(expected_dnds, 1, function(row) {
-  site <- as.numeric(row["CodonSite"])
-  total_dnds <- 0
-  total_sites <- 0
-  for (adjsite in max(MIN_SITE, site-SMOOTH_DIST):min(MAX_SITE, site+SMOOTH_DIST)) {
-    if (!is.na(expected_dnds[expected_dnds$CodonSite==adjsite, "Omega"])) {
-      total_dnds <- total_dnds + expected_dnds[expected_dnds$CodonSite==adjsite, "Omega"]
-      total_sites <- total_sites +1
-    }
-  }
-  multisite_ave <- total_dnds / total_sites
-  return (multisite_ave)
-})
-
 #' **Summary Expected dN/dS Stats**
 #' 
 summary(expected_dnds)
@@ -220,11 +170,11 @@ plot_coeff_var <- function(collate_dnds, colname, descname) {
   coeff_var <- ddply(.data=collate_dnds, 
                      .variables="CodonSite",                          
                      .fun=function(x) {
-                           ave <- mean(x[, colname], na.rm=TRUE)
-                           stddev <- sd(x[, colname], na.rm=TRUE)
-                           cv <- stddev/ave
-                           return (data.frame(ave=ave, stddev=stddev, cv=cv))
-                         })
+                       ave <- mean(x[, colname], na.rm=TRUE)
+                       stddev <- sd(x[, colname], na.rm=TRUE)
+                       cv <- stddev/ave
+                       return (data.frame(ave=ave, stddev=stddev, cv=cv))
+                     })
   
   coeff_var <- coeff_var[order(coeff_var$CodonSite), ]
   
@@ -234,7 +184,7 @@ plot_coeff_var <- function(collate_dnds, colname, descname) {
   }
   
   print(summary(coeff_var))
-
+  
   fig <- ggplot(coeff_var, aes(x=CodonSite, y=cv)) + 
     geom_point(shape=1, alpha=0.5) +  
     geom_smooth() + 
@@ -244,7 +194,7 @@ plot_coeff_var <- function(collate_dnds, colname, descname) {
     ggtitle(paste0("Coefficient of Variance Across Windows for ", descname))
   print(fig)
 }
-  
+
 plot_coeff_var(collate_dnds, "Conserve", "Conservation")
 plot_coeff_var(collate_dnds, "Reads", "Max Reads")
 plot_coeff_var(collate_dnds, "Diverge", "Divergence")
@@ -277,20 +227,20 @@ fill_nowindow_codon_conserve_dat <- function(nuc_conserve_csv) {
   
   # Get per-codon average stats for Divergence, Entropy
   conserve_codon <- adply(.data=c(1:NUM_CODON_SITES), .margins=1,
-                           .fun=function(codonsite) {
-                             start_nuc_site <- (codonsite * 3) -2  # 1-based nucleotide sites
-                             end_nuc_site <- codonsite * 3
-                             codon_set <- conserve_nuc[conserve_nuc$NucSite >= start_nuc_site & conserve_nuc$NucSite <= end_nuc_site,]
-                             data.frame(  
-                               CodonDepth=conserve_nuc[start_nuc_site, "CodonDepth"],
-                               Conserve=mean(codon_set$Conserve),
-                               Diverge=mean(codon_set$Diverge),
-                               Entropy=mean(codon_set$Entropy))
+                          .fun=function(codonsite) {
+                            start_nuc_site <- (codonsite * 3) -2  # 1-based nucleotide sites
+                            end_nuc_site <- codonsite * 3
+                            codon_set <- conserve_nuc[conserve_nuc$NucSite >= start_nuc_site & conserve_nuc$NucSite <= end_nuc_site,]
+                            data.frame(  
+                              CodonDepth=conserve_nuc[start_nuc_site, "CodonDepth"],
+                              Conserve=mean(codon_set$Conserve),
+                              Diverge=mean(codon_set$Diverge),
+                              Entropy=mean(codon_set$Entropy))
                           })
   colnames(conserve_codon)[1] <- "CodonSite"  # rename X1 column to CodonSite
   conserve_codon$CodonSite <- as.numeric(conserve_codon$CodonSite)
   returnDat <- list(CodonDat=conserve_codon,
-                          NucStat=summary(conserve_nuc))
+                    NucStat=summary(conserve_nuc))
   return (returnDat)
 }
 
@@ -315,17 +265,17 @@ plot_subst_vs_diversity <- function(codon_dat, diversity_title, subst_title, div
                        by="CodonSite", all=TRUE)
   }
   phylo_subst_melt <- reshape2:::melt(data=subset(codon_dat, select=c(CodonSite, S, N, Subst)),
-                                             id.vars="CodonSite",
-                                             measure.vars=c("S", "N", "Subst"),
-                                             variable.name="PhyloMeasure", 
-                                             value.name="PhyloVal")
+                                      id.vars="CodonSite",
+                                      measure.vars=c("S", "N", "Subst"),
+                                      variable.name="PhyloMeasure", 
+                                      value.name="PhyloVal")
   phylo_subst_melt$PhyloMeasure <- paste0(phylo_subst_melt$PhyloMeasure, subst_measure_suffix)
   
   leaf_diversity_melt <- reshape2:::melt(data=subset(codon_dat, select=c(CodonSite, CodonDepth, Diverge, Entropy)),
-                                                id.vars="CodonSite",
-                                                measure.vars=c("CodonDepth", "Diverge", "Entropy"),
-                                                variable.name="LeafMeasure", 
-                                                value.name="LeafVal")
+                                         id.vars="CodonSite",
+                                         measure.vars=c("CodonDepth", "Diverge", "Entropy"),
+                                         variable.name="LeafMeasure", 
+                                         value.name="LeafVal")
   leaf_diversity_melt$LeafMeasure <- paste0(leaf_diversity_melt$LeafMeasure, diversity_measure_suffix)
   
   combo <- merge(x=phylo_subst_melt, y=leaf_diversity_melt, by="CodonSite", all=TRUE)
@@ -413,7 +363,7 @@ plot_subst_vs_diversity(codon_dat=NULL, diversity_title="Aligned Read", subst_ti
 # - nowindow_measure_suffix:  nowindow measure suffix
 # - window_measure_suffix:  window measure suffix
 plot_win_subst_div_vs_nowin_div <- function(nowindow_leaf_diversity, nowindow_phylo_subst, win_codon_dat,
-                                     nowindow_title, window_title, nowindow_measure_suffix, window_measure_suffix) {
+                                            nowindow_title, window_title, nowindow_measure_suffix, window_measure_suffix) {
   
   nowindow_leaf_diversity_melt <- reshape2:::melt(data=subset(nowindow_leaf_diversity, select=c(CodonSite, CodonDepth, Diverge, Entropy)),
                                                   id.vars="CodonSite",
@@ -444,30 +394,30 @@ plot_win_subst_div_vs_nowin_div <- function(nowindow_leaf_diversity, nowindow_ph
   window_leaf_diversity_melt$LeafMeasure.Win <- paste0(window_leaf_diversity_melt$LeafMeasure.Win, window_measure_suffix)
   
   
-#   win_nowindow_leaf_combo <- merge(x=window_leaf_diversity_melt, y=nowindow_leaf_diversity_melt, by="CodonSite", all=TRUE)
-#   fig <- ggplot(win_nowindow_leaf_combo, aes(x=LeafVal.NoWin, y=LeafVal.Win)) + 
-#     facet_grid(LeafMeasure.Win~LeafMeasure.NoWin, scales="free") + 
-#     geom_point(shape=1, alpha=0.1) + 
-#     geom_smooth(method="lm") + 
-#     xlab(paste0("\n", nowindow_title, " Sequence Diversity")) + 
-#     ylab(paste0(window_title, " Sequence Diversity\n")) + 
-#     ggtitle(paste0("Scatterplot ", window_title, " Sequence Diversity Vs ", nowindow_title, " Sequence Diversity"))
-#   print(fig)
-#   
+  #   win_nowindow_leaf_combo <- merge(x=window_leaf_diversity_melt, y=nowindow_leaf_diversity_melt, by="CodonSite", all=TRUE)
+  #   fig <- ggplot(win_nowindow_leaf_combo, aes(x=LeafVal.NoWin, y=LeafVal.Win)) + 
+  #     facet_grid(LeafMeasure.Win~LeafMeasure.NoWin, scales="free") + 
+  #     geom_point(shape=1, alpha=0.1) + 
+  #     geom_smooth(method="lm") + 
+  #     xlab(paste0("\n", nowindow_title, " Sequence Diversity")) + 
+  #     ylab(paste0(window_title, " Sequence Diversity\n")) + 
+  #     ggtitle(paste0("Scatterplot ", window_title, " Sequence Diversity Vs ", nowindow_title, " Sequence Diversity"))
+  #   print(fig)
+  #   
   win_nowindow_leaf_combo <- merge(x=subset(win_codon_dat, select=c(CodonSite, CodonDepth, Diverge, Entropy)), 
-                                       y=subset(nowindow_leaf_diversity, select=c(CodonSite, CodonDepth, Diverge, Entropy)), 
+                                   y=subset(nowindow_leaf_diversity, select=c(CodonSite, CodonDepth, Diverge, Entropy)), 
                                    by="CodonSite", all.x=TRUE,  all.y=FALSE, 
                                    suffixes=c(window_measure_suffix, nowindow_measure_suffix))
   
   sapply(c("CodonDepth", "Diverge", "Entropy"), function(colname) {
-      fig <- ggplot(win_nowindow_leaf_combo, aes_string(x=paste0(colname, nowindow_measure_suffix), 
-                                                        y=paste0(colname, window_measure_suffix))) + 
-        geom_point(shape=1, alpha=0.1) + 
-        geom_smooth(method="lm") + 
-        xlab(paste0("\n", nowindow_title, " ", colname)) + 
-        ylab(paste0(window_title, " ", colname, "\n")) + 
-        ggtitle(paste0("Scatterplot ", window_title, " ", colname, " Vs ", nowindow_title, " ", colname))
-      print(fig)
+    fig <- ggplot(win_nowindow_leaf_combo, aes_string(x=paste0(colname, nowindow_measure_suffix), 
+                                                      y=paste0(colname, window_measure_suffix))) + 
+      geom_point(shape=1, alpha=0.1) + 
+      geom_smooth(method="lm") + 
+      xlab(paste0("\n", nowindow_title, " ", colname)) + 
+      ylab(paste0(window_title, " ", colname, "\n")) + 
+      ggtitle(paste0("Scatterplot ", window_title, " ", colname, " Vs ", nowindow_title, " ", colname))
+    print(fig)
   })
   
   # Scatterplot Window Phylogeny Substitutions Vs  Non-Window Sequence Diversity  
@@ -484,7 +434,7 @@ plot_win_subst_div_vs_nowin_div <- function(nowindow_leaf_diversity, nowindow_ph
 
 # Scatterplots Window SLAC Counts vs Full Population SLAC Counts
 plot_win_subst_vs_full_subst <- function(nowindow_phylo_subst, win_codon_dat,
-                                            nowindow_title, window_title, nowindow_measure_suffix, window_measure_suffix) {
+                                         nowindow_title, window_title, nowindow_measure_suffix, window_measure_suffix) {
   
   # Density Plot of Window-Codon Sites at Each Full Population N, S, Subst Count
   # Scatterplot Window SLAC Vs  Full Population SLAC
@@ -496,12 +446,12 @@ plot_win_subst_vs_full_subst <- function(nowindow_phylo_subst, win_codon_dat,
     
     # Cumulative Frequency plot Window-Codon Sites at Each Full POpulation N, S, Subst Count
     fig <- ggplot(win_nowindow_subst_combo, aes_string(x=paste0(col, nowindow_measure_suffix))) +
-        stat_ecdf() + 
-        xlab(paste0("\n", nowindow_title, " " , col)) + 
-        ylab("Cumulative Frequency Window-Codon Sites\n") + 
-        ggtitle(paste0("Cumulative Frequency Plot Window-Codon Sites by  ", nowindow_title, " ", col))
+      stat_ecdf() + 
+      xlab(paste0("\n", nowindow_title, " " , col)) + 
+      ylab("Cumulative Frequency Window-Codon Sites\n") + 
+      ggtitle(paste0("Cumulative Frequency Plot Window-Codon Sites by  ", nowindow_title, " ", col))
     print(fig)
-      
+    
     
     # Scatterplot Window N, S, Subst Vs Full Population N, S, Subst
     fig <- ggplot(win_nowindow_subst_combo, aes_string(x=paste0(col, nowindow_measure_suffix), 
@@ -528,8 +478,8 @@ kable(summary(full_popn_conserve_dat$CodonDat), format="html", caption="Full Pop
 
 #+ fig.width=12, fig.height=12
 plot_win_subst_vs_full_subst(nowindow_phylo_subst=expected_dnds, win_codon_dat=collate_dnds,
-                                nowindow_title="Full Population", window_title="Window", 
-                                nowindow_measure_suffix=".Full", window_measure_suffix=".Win")
+                             nowindow_title="Full Population", window_title="Window", 
+                             nowindow_measure_suffix=".Full", window_measure_suffix=".Win")
 
 #' **What happens to windows when full population N > mean + 1SD = `r mean(expected_dnds$N) + sd(expected_dnds$N)` ?**
 #' 
@@ -554,9 +504,9 @@ summary(collate_dnds[collate_dnds$CodonSite %in% expected_dnds[expected_dnds$Sub
 
 #+ fig.width=12, fig.height=12
 plot_win_subst_div_vs_nowin_div(nowindow_leaf_diversity=full_popn_conserve_dat$CodonDat, 
-                         nowindow_phylo_subst=expected_dnds, win_codon_dat=collate_dnds,
-                         nowindow_title="Full Population", window_title="Window", 
-                         nowindow_measure_suffix=".Full", window_measure_suffix=".Win")
+                                nowindow_phylo_subst=expected_dnds, win_codon_dat=collate_dnds,
+                                nowindow_title="Full Population", window_title="Window", 
+                                nowindow_measure_suffix=".Full", window_measure_suffix=".Win")
 #'
 #' Effect on Windowing in Sequencing Diversity and Phylogeny Substitutions Compared to Original ART reads
 #' =================================================
@@ -568,9 +518,9 @@ kable(summary(orig_conserve_dat$CodonDat), format="html", caption="Original Read
 
 #+ fig.width=12, fig.height=12
 plot_win_subst_div_vs_nowin_div(nowindow_leaf_diversity=orig_conserve_dat$CodonDat, 
-                         nowindow_phylo_subst=expected_dnds, win_codon_dat=collate_dnds,
-                         nowindow_title="Original Reads", window_title="Window", 
-                         nowindow_measure_suffix=".Orig", window_measure_suffix=".Win")
+                                nowindow_phylo_subst=expected_dnds, win_codon_dat=collate_dnds,
+                                nowindow_title="Original Reads", window_title="Window", 
+                                nowindow_measure_suffix=".Orig", window_measure_suffix=".Win")
 
 
 #' Effect on Windowing in Sequencing Diversity and Phylogeny Substitutions Compared to Aligned ART reads
@@ -596,8 +546,7 @@ plot_win_subst_div_vs_nowin_div(nowindow_leaf_diversity=aln_conserve_dat$CodonDa
 
 #' **Scatterplot actual vs expected dn ds together**
 fullDat <- cbind(actual_dnds, 
-                 Expected=expected_dnds$Omega, 
-                 ExpectedMultisite=expected_dnds$MultisiteAveDnDs, 
+                 Expected=expected_dnds$Omega,                  
                  ExpectedMinus=expected_dnds$Scaled.dN.dS,
                  ExpectedSyn=expected_dnds$S,
                  ExpectedNonSyn=expected_dnds$N)
@@ -635,13 +584,6 @@ scatterplot_act_exp_dnds("dN_minus_dS", "Inferred Scaled dN-dS Averaged Across W
 scatterplot_act_exp_dnds("dN_minus_dSWeightByReadsNoLowSubst", 
                          "Inferred Scaled dN-dS Averaged Across Windows With >=1 N, >=1 S, Weighted by Reads", 
                          "ExpectedMinus", "Expected Scaled dN-dS")
-scatterplot_act_exp_dnds("multisiteAvedNdS", "Inferred Multisite Ave dN/dS", 
-                         "ExpectedMultisite", "Expected Multisite Ave dN/dS")
-scatterplot_act_exp_dnds("multisiteAvedNdSWeightBySubst", "Inferred Multisite Ave dN/dS, Sites weighted by Substitutions", 
-                         "ExpectedMultisite", "Expected Multisite Ave dN/dS")
-scatterplot_act_exp_dnds("multisitedNdSWeightBySubst", "Inferred Multisite dN/dS", 
-                         "ExpectedMultisite", "Expected Multisite Ave dN/dS")
-
 
 fullDatBydatsource <- reshape2:::melt.data.frame(data=fullDat, na.rm = FALSE, id.vars=c("CodonSite"),
                                                  variable.name="datsource", value.name="perSiteVal")
@@ -655,7 +597,7 @@ summary(fullDatBydatsource)
 plot_dnds_across_genome <- function(cols, title, ylabel) {
   # Smoothed 
   fig <- ggplot(fullDatBydatsource[fullDatBydatsource$datsource %in% cols,], 
-         aes(x=CodonSite, y=perSiteVal, color=datsource, linetype=datsource) ) + 
+                aes(x=CodonSite, y=perSiteVal, color=datsource, linetype=datsource) ) + 
     geom_smooth() + 
     xlab("\nCodon Site") + 
     ylab(paste0(ylabel, "\n")) + 
@@ -694,14 +636,6 @@ plot_dnds_across_genome(cols=c("dNdSWeightByReadsNoLowSyn", "dNdSWeightByReadsNo
 #+ fig.width=20
 plot_dnds_across_genome(cols=c("dN_minus_dS", "ExpectedMinus"),
                         ylabel="dN-dS", title="dN-dS")
-
-#+ fig.width=20
-plot_dnds_across_genome(cols=c("multisiteAvedNdS", "multisiteAvedNdSWeightBySubst", "multisitedNdSWeightBySubst", "ExpectedMultisite"),
-                        ylabel="Multisite dN/dS", title="Multisite dN/dS")
-
-#+ fig.width=20
-plot_dnds_across_genome(cols=c("multisitedNdSWeightBySubst", "ExpectedMultisite"),
-                        ylabel="Multisite dN/dS", title="Multisite dN/dS")
 
 
 
@@ -778,23 +712,17 @@ ggplot(expected_dnds, aes(x=CodonSite, y=Omega) ) + geom_line() +
 # Returns a table of Lin's concordance correlation values
 print_table_corr <- function() {
   site_dnds_corr <- sapply(c("aveDnDs", "dNdSWeightBySubst", "dNdSWeightByReads", "dNdSWeightByReadsNoLowSyn", "dNdSWeightByReadsNoLowSubst"),
-         function(col) {
-           dnds_ccc <- epi.ccc(fullDat[, col], fullDat$Expected)
-           return (dnds_ccc$rho.c$est)
-         })
-  
-  multisite_dnds_corr <- sapply(c("multisiteAvedNdS", "multisiteAvedNdSWeightBySubst", "multisitedNdSWeightBySubst"),
                            function(col) {
-                             dnds_ccc <- epi.ccc(fullDat[, col], fullDat$ExpectedMultisite)
+                             dnds_ccc <- epi.ccc(fullDat[, col], fullDat$Expected)
                              return (dnds_ccc$rho.c$est)
                            })
   
   site_dn_minus_ds_corr <- sapply(c("dN_minus_dS", "dN_minus_dSWeightByReadsNoLowSubst", "dN_minus_dSWeightByReads"),
-                                function(col) {
-                                  dnds_ccc <- epi.ccc(fullDat[, col], fullDat$ExpectedMinus)
-                                  return (dnds_ccc$rho.c$est)
-                                })
-  corr_vals <- data.frame(Concordance=c(site_dnds_corr, multisite_dnds_corr, site_dn_minus_ds_corr))
+                                  function(col) {
+                                    dnds_ccc <- epi.ccc(fullDat[, col], fullDat$ExpectedMinus)
+                                    return (dnds_ccc$rho.c$est)
+                                  })
+  corr_vals <- data.frame(Concordance=c(site_dnds_corr, site_dn_minus_ds_corr))
 }
 
 table_corr <- print_table_corr()
@@ -814,20 +742,17 @@ plot_table_corr_by_div <- function(nowindow_leaf_diversity) {
   
   corr_vals <-ddply(.data=full_div_combo,
                     .variables="DivergeBin",
-                     .fun=function(x) {
-                        data.frame(                                               
-                          aveDnDs=epi.ccc(x$aveDnDs, x$Expected)$rho.c$est,
-                          dNdSWeightBySubst=epi.ccc(x$dNdSWeightBySubst, x$Expected)$rho.c$est,
-                          dNdSWeightByReads=epi.ccc(x$dNdSWeightByReads, x$Expected)$rho.c$est,
-                          dNdSWeightByReadsNoLowSyn=epi.ccc(x$dNdSWeightByReadsNoLowSyn, x$Expected)$rho.c$est,
-                          dNdSWeightByReadsNoLowSubst=epi.ccc(x$dNdSWeightByReadsNoLowSubst, x$Expected)$rho.c$est,
-                          multisiteAvedNdS=epi.ccc(x$multisiteAvedNdS, x$ExpectedMultisite)$rho.c$est,
-                          multisiteAvedNdSWeightBySubst=epi.ccc(x$multisiteAvedNdSWeightBySubst, x$ExpectedMultisite)$rho.c$est,
-                          multisitedNdSWeightBySubst=epi.ccc(x$multisitedNdSWeightBySubst, x$ExpectedMultisite)$rho.c$est,
-                          dN_minus_dS=epi.ccc(x$dN_minus_dS, x$ExpectedMinus)$rho.c$est,
-                          dN_minus_dSWeightByReadsNoLowSubst=epi.ccc(x$dN_minus_dSWeightByReadsNoLowSubst, x$ExpectedMinus)$rho.c$est,
-                          dN_minus_dSWeightByReads=epi.ccc(x$dN_minus_dSWeightByReads, x$ExpectedMinus)$rho.c$est)
-                  })
+                    .fun=function(x) {
+                      data.frame(                                               
+                        aveDnDs=epi.ccc(x$aveDnDs, x$Expected)$rho.c$est,
+                        dNdSWeightBySubst=epi.ccc(x$dNdSWeightBySubst, x$Expected)$rho.c$est,
+                        dNdSWeightByReads=epi.ccc(x$dNdSWeightByReads, x$Expected)$rho.c$est,
+                        dNdSWeightByReadsNoLowSyn=epi.ccc(x$dNdSWeightByReadsNoLowSyn, x$Expected)$rho.c$est,
+                        dNdSWeightByReadsNoLowSubst=epi.ccc(x$dNdSWeightByReadsNoLowSubst, x$Expected)$rho.c$est,                        
+                        dN_minus_dS=epi.ccc(x$dN_minus_dS, x$ExpectedMinus)$rho.c$est,
+                        dN_minus_dSWeightByReadsNoLowSubst=epi.ccc(x$dN_minus_dSWeightByReadsNoLowSubst, x$ExpectedMinus)$rho.c$est,
+                        dN_minus_dSWeightByReads=epi.ccc(x$dN_minus_dSWeightByReads, x$ExpectedMinus)$rho.c$est)
+                    })
   
   corr_vals_melt <- reshape2:::melt(data=corr_vals, id.vars="DivergeBin", variable.name="dnds_calc", value.name="Concordance")
   corr_vals_melt$Concordance[is.na(corr_vals_melt$Concordance)] <-  0
@@ -844,7 +769,7 @@ plot_table_corr_by_div <- function(nowindow_leaf_diversity) {
 #' =======================================================================================
 #' 
 #+ fig.width=15, fig.height=12
- plot_table_corr_by_div(full_popn_conserve_dat$CodonDat)
+plot_table_corr_by_div(full_popn_conserve_dat$CodonDat)
 
 
 
@@ -853,14 +778,14 @@ plot_table_corr_by_div <- function(nowindow_leaf_diversity) {
 #' =======================================================================================
 #' 
 #+ fig.width=15, fig.height=12
- plot_table_corr_by_div(orig_conserve_dat$CodonDat)
+plot_table_corr_by_div(orig_conserve_dat$CodonDat)
 
 #'
 #' What is the Concordance By Aligned Read Diversity
 #' =======================================================================================
 #' 
 #+ fig.width=15, fig.height=12
- plot_table_corr_by_div(aln_conserve_dat$CodonDat)
+plot_table_corr_by_div(aln_conserve_dat$CodonDat)
 
 
 #' What Happens to Sites with Expected dN/dS < 1?
@@ -873,7 +798,7 @@ summary(collate_dnds[collate_dnds$CodonSite %in% sites_exp_purify, ])
 #' ================================================================
 #'  
 sites_low_act_div_exp_purify <- intersect(full_popn_conserve_dat$CodonDat[full_popn_conserve_dat$CodonDat$Diverge < mean(full_popn_conserve_dat$CodonDat$Diverge), "CodonSite"],
-                                             sites_exp_purify)
+                                          sites_exp_purify)
 summary(collate_dnds[collate_dnds$CodonSite %in% sites_low_act_div_exp_purify, ])
 
 
@@ -888,7 +813,6 @@ summary(collate_dnds[collate_dnds$CodonSite %in% sites_exp_diversify, ])
 #' ================================================================
 #'  
 sites_low_act_div_exp_diversify <- intersect(full_popn_conserve_dat$CodonDat[full_popn_conserve_dat$CodonDat$Diverge < mean(full_popn_conserve_dat$CodonDat$Diverge), "CodonSite"],
-                                                sites_exp_diversify)
+                                             sites_exp_diversify)
 summary(collate_dnds[collate_dnds$CodonSite %in% sites_low_act_div_exp_diversify, ])
-
 
