@@ -64,7 +64,7 @@ def do_sliding_window(outdir, output_csv, samfilename, ref_fasta, expected_dnds_
         fh_out_config.write("EXPECTED_DNDS_END_NUC_POS=" + str(ref_len) + "\n")
         fh_out_config.write("INDELIBLE_DNDS_FILENAME=" + indelible_dnds_filename + "\n")
 
-    Rscript_wdir =  os.path.abspath(os.path.dirname(os.path.realpath(os.path.realpath(__file__))) + os.sep + "simulations" + os.sep + "R")
+    Rscript_wdir =  os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep + "simulations" + os.sep + "R")
     subprocess.check_call(["Rscript", "-e",
                            ("library(knitr); " +
                             "setwd('{}'); ".format(Rscript_wdir) +
@@ -91,7 +91,7 @@ def do_collate(outdir, output_csv, ref_fasta, full_popn_fasta,expected_dnds_file
         fh_out_config.write("ORIG_CONSERVE_CSV=" + orig_conserve_csv + "\n")
         fh_out_config.write("ALN_CONSERVE_CSV=" + aln_conserve_csv + "\n")
 
-    Rscript_wdir =  os.path.abspath(os.path.dirname(os.path.realpath(os.path.realpath(__file__))) + os.sep + "simulations" + os.sep + "R")
+    Rscript_wdir =  os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep + "R")
     subprocess.check_call(["Rscript", "-e",
                            ("library(knitr); " +
                             "setwd('{}'); ".format(Rscript_wdir) +
