@@ -32,8 +32,6 @@ START_NUCPOS = 1
 SMOOTH_DIST=10
 WINDOW_SLIDE = 30
 
-HYPHY_EXE = "/home/thuy/programs/hyphy/hyphy-2.2.3/HYPHYMP"
-HYPHY_BASEPATH = "/home/thuy/programs/hyphy/hyphy-2.2.3/res/TemplateBatchFiles"
 
 REF = "consensus"
 
@@ -54,8 +52,6 @@ def do_sliding_window(outdir, output_csv, samfilename, ref_fasta, expected_dnds_
                                                            concurrent_windows=WINDOW_PROCS,
                                                            output_csv_filename=output_csv,
                                                            window_slide=WINDOW_SLIDE,
-                                                           hyphy_exe=HYPHY_EXE,
-                                                           hyphy_basedir=HYPHY_BASEPATH,
                                                            insert=False,
                                                            mask_stop_codon=True)  # TODO:  don't hardcode this
 
