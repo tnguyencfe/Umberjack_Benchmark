@@ -79,7 +79,10 @@ def do_collate(outdir, output_csv, ref_fasta, full_popn_fasta,expected_dnds_file
                full_popn_conserve_csv, orig_conserve_csv, aln_conserve_csv):
     ref_len = Utility.get_seq2len(ref_fasta)[REF]
     collect_stats.collect_dnds(output_dir=outdir, output_csv_filename=output_csv, full_popn_fasta=full_popn_fasta)
-    rcollate_config_file = os.path.dirname(os.path.realpath(__file__)) + os.sep +"simulations" + os.sep + "R" + os.sep + "aggreg_window.config"
+
+    Rscript_wdir =  os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep + "R")
+
+    rcollate_config_file = Rscript_wdir + os.sep + "aggreg_window.config"
     with open(rcollate_config_file, 'w') as fh_out_config:
         fh_out_config.write("COLLATE_DNDS_FILENAME=" + output_csv + "\n")
         fh_out_config.write("EXPECTED_DNDS_FILENAME=" + expected_dnds_filename + "\n")
@@ -91,7 +94,7 @@ def do_collate(outdir, output_csv, ref_fasta, full_popn_fasta,expected_dnds_file
         fh_out_config.write("ORIG_CONSERVE_CSV=" + orig_conserve_csv + "\n")
         fh_out_config.write("ALN_CONSERVE_CSV=" + aln_conserve_csv + "\n")
 
-    Rscript_wdir =  os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep + "R")
+    
     subprocess.check_call(["Rscript", "-e",
                            ("library(knitr); " +
                             "setwd('{}'); ".format(Rscript_wdir) +
