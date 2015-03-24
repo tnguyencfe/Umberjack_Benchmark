@@ -31,6 +31,7 @@ WINDOW_PROCS = 3
 START_NUCPOS = 1
 SMOOTH_DIST=10
 WINDOW_SLIDE = 30
+PROCS = 20
 
 
 REF = "consensus"
@@ -55,7 +56,7 @@ def do_sliding_window(outdir, output_csv, samfilename, ref_fasta, expected_dnds_
                                                            insert=False,
                                                            mask_stop_codon=True)  # TODO:  don't hardcode this
 
-    rconfig_file = os.path.dirname(__file__) + os.sep +"simulations" + os.sep + "R" + os.sep + "umberjack_unit_test.config"
+    rconfig_file = os.path.dirname(os.path.realpath(__file__)) + os.sep +"simulations" + os.sep + "R" + os.sep + "umberjack_unit_test.config"
     with open(rconfig_file, 'w') as fh_out_config:
         fh_out_config.write("ACTUAL_DNDS_FILENAME=" + output_csv + "\n")
         fh_out_config.write("EXPECTED_DNDS_FILENAME=" + expected_dnds_filename + "\n")
@@ -63,7 +64,7 @@ def do_sliding_window(outdir, output_csv, samfilename, ref_fasta, expected_dnds_
         fh_out_config.write("EXPECTED_DNDS_END_NUC_POS=" + str(ref_len) + "\n")
         fh_out_config.write("INDELIBLE_DNDS_FILENAME=" + indelible_dnds_filename + "\n")
 
-    Rscript_wdir =  os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep + "simulations" + os.sep + "R")
+    Rscript_wdir =  os.path.abspath(os.path.dirname(os.path.realpath(os.path.realpath(__file__))) + os.sep + "simulations" + os.sep + "R")
     subprocess.check_call(["Rscript", "-e",
                            ("library(knitr); " +
                             "setwd('{}'); ".format(Rscript_wdir) +
@@ -78,7 +79,7 @@ def do_collate(outdir, output_csv, ref_fasta, full_popn_fasta,expected_dnds_file
                full_popn_conserve_csv, orig_conserve_csv, aln_conserve_csv):
     ref_len = Utility.get_seq2len(ref_fasta)[REF]
     collect_stats.collect_dnds(output_dir=outdir, output_csv_filename=output_csv, full_popn_fasta=full_popn_fasta)
-    rcollate_config_file = os.path.dirname(__file__) + os.sep +"simulations" + os.sep + "R" + os.sep + "aggreg_window.config"
+    rcollate_config_file = os.path.dirname(os.path.realpath(__file__)) + os.sep +"simulations" + os.sep + "R" + os.sep + "aggreg_window.config"
     with open(rcollate_config_file, 'w') as fh_out_config:
         fh_out_config.write("COLLATE_DNDS_FILENAME=" + output_csv + "\n")
         fh_out_config.write("EXPECTED_DNDS_FILENAME=" + expected_dnds_filename + "\n")
@@ -90,7 +91,7 @@ def do_collate(outdir, output_csv, ref_fasta, full_popn_fasta,expected_dnds_file
         fh_out_config.write("ORIG_CONSERVE_CSV=" + orig_conserve_csv + "\n")
         fh_out_config.write("ALN_CONSERVE_CSV=" + aln_conserve_csv + "\n")
 
-    Rscript_wdir =  os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep + "simulations" + os.sep + "R")
+    Rscript_wdir =  os.path.abspath(os.path.dirname(os.path.realpath(os.path.realpath(__file__))) + os.sep + "simulations" + os.sep + "R")
     subprocess.check_call(["Rscript", "-e",
                            ("library(knitr); " +
                             "setwd('{}'); ".format(Rscript_wdir) +
@@ -242,25 +243,24 @@ def gen_sim_data(config_file, indiv, codonsites, cov, window_size, breadth, dept
     else:
         with open(config_file, 'w') as fh_out:
             fh_out.write("[sim]\n")
-            fh_out.write("OUTDIR={}\n".format(sim_outdir))
             fh_out.write("FILENAME_PREFIX={}\n".format(filename_prefix))
             fh_out.write("NUM_INDIV={}\n".format(indiv))
             fh_out.write("SEED=9828384\n")
             fh_out.write("NUM_CODON_SITES={}\n".format(codonsites))
-            fh_out.write("INDELIBLE_BIN_DIR=/home/thuy/programs/INDELibleV1.03/src\n")
+            fh_out.write("INDELIBLE_BIN_DIR=../../bin/indelible/indelible_1.03/linux_x64\n")
             fh_out.write("INDELIBLE_SCALING_RATES={}\n".format("5,10,20,50,100"))
-            fh_out.write("ART_BIN_DIR = /home/thuy/programs/art/art_bin_VanillaIceCream\n")
-            fh_out.write("ART_QUAL_PROFILE_TSV1 = /home/thuy/programs/art/art_bin_VanillaIceCream/Illumina_profiles/EmpMiSeq250R1.txt\n")
-            fh_out.write("ART_QUAL_PROFILE_TSV2 = /home/thuy/programs/art/art_bin_VanillaIceCream/Illumina_profiles/EmpMiSeq250R2.txt\n")
+            fh_out.write("ART_BIN_DIR = ../../bin/art/art_3.11.14/linux_x64\n")
+            fh_out.write("ART_QUAL_PROFILE_TSV1 = ../../bin/art/art_3.11.14/Illumina_profiles/EmpMiSeq250R1.txt\n")
+            fh_out.write("ART_QUAL_PROFILE_TSV2 = ../../bin/art/art_3.11.14/Illumina_profiles/EmpMiSeq250R2.txt\n")
             fh_out.write("ART_FOLD_COVER={}\n".format(cov))
             fh_out.write("ART_MEAN_INSERT = 346\n")
             fh_out.write("ART_STDEV_INSERT = 75\n")
-            fh_out.write("PICARD_BIN_DIR = /home/thuy/programs/picard/picard-tools-1.128\n")
-            fh_out.write("BWA_BIN_DIR = /home/thuy/programs/bwa/bwa-0.7.8\n")
-            fh_out.write("PROCS = 10\n")
-            fh_out.write("FASTTREE_EXE = /home/thuy/programs/fasttree/FastTree\n")
-            fh_out.write("HYPHY_EXE = {}\n".format(HYPHY_EXE))
-            fh_out.write("HYPHY_BASEPATH = {}\n".format(HYPHY_BASEPATH))
+            fh_out.write("PICARD_BIN_DIR = ../../bin/picard/picard_1.129\n")
+            fh_out.write("BWA_BIN_DIR = ../../bin/bwa/bwa_0.7.12/linux_x64\n")
+            fh_out.write("PROCS = {}\n".format(PROCS))
+            fh_out.write("FASTTREE_EXE = ../../bin/fasttree/fasttree_2.1.7/linux_x64/FastTree\n")
+            fh_out.write("HYPHY_EXE = ../../bin/hyphy/hyphy_2.2.3/linux_x64/HYPHYMP\n")
+            fh_out.write("HYPHY_BASEPATH = ../../bin/hyphy/hyphy_2.2.3/res/TemplateBatchFiles\n")
 
     sim_pipeline_exe = os.path.dirname(os.path.realpath(__file__)) + "/simulations/sim_pipeline.py"
     subprocess.check_call(["python", sim_pipeline_exe, config_file])
@@ -296,7 +296,7 @@ if __name__ == "__main__":
                             ORIG_CONSERVE_CSV = SIM_DATA_DIR + os.sep + TEST_PREFIX + "/mixed/reads/" + TEST_PREFIX + ".mixed.reads.conserve.csv"
                             ALN_CONSERVE_CSV = SIM_DATA_DIR + os.sep + TEST_PREFIX + "/mixed/aln/" + TEST_PREFIX + ".mixed.reads.consensus.bwa.conserve.csv"
 
-                            OUT_DIR =   os.path.dirname(__file__) + os.sep +"simulations/out/" + TEST_PREFIX + "/consensus/window" + str(window_size)
+                            OUT_DIR =   os.path.dirname(os.path.realpath(__file__)) + os.sep +"simulations/out/" + TEST_PREFIX + "/consensus/window" + str(window_size)
                             ACTUAL_DNDS_FILENAME = OUT_DIR + os.sep + 'actual_dnds_by_site.csv'
                             EXPECTED_DNDS_FILENAME = REFERENCE_FASTA.replace("consensus.fasta", "dnds.tsv")
                             COLLATE_ACT_DNDS_FILENAME = OUT_DIR + os.sep + "collate_dnds.csv"
@@ -304,7 +304,7 @@ if __name__ == "__main__":
                             INDELIBLE_DNDS_FILENAME = SIM_DATA_DIR + "/" + TEST_PREFIX + "/mixed/" + TEST_PREFIX + ".mixed.rates.csv"
 
                             ERR_FREE_ALN_CONSENSUS_SAM_FILENAME = SAM_FILENAME.replace(".reads.", ".reads.errFree.")
-                            ERR_FREE_OUT_DIR =   os.path.dirname(__file__) + os.sep +"simulations/out/" + TEST_PREFIX + "/consensus/window" + str(window_size) + ".errFree"
+                            ERR_FREE_OUT_DIR =   os.path.dirname(os.path.realpath(__file__)) + os.sep +"simulations/out/" + TEST_PREFIX + "/consensus/window" + str(window_size) + ".errFree"
                             ERR_FREE_ACTUAL_DNDS_CSV = ERR_FREE_OUT_DIR + os.sep + 'actual_dnds_by_site.csv'
                             COLLATE_ACT_ERRFREE_DNDS_FILENAME = ERR_FREE_OUT_DIR + os.sep + "collate_dnds.csv"
                             ERR_FREE_ORIG_CONSERVE_CSV = ORIG_CONSERVE_CSV.replace(".reads", ".reads.errFree")
@@ -340,7 +340,7 @@ if __name__ == "__main__":
                                        orig_conserve_csv=ERR_FREE_ORIG_CONSERVE_CSV, aln_conserve_csv=ERR_FREE_ALN_CONSERVE_CSV)
 
                             # # What happens when we downsample the error free windows with the same sequences as the typical windows?
-                            # DOWNSAMPLE_ERRFREE_OUTDIR = (os.path.dirname(__file__) + os.sep +"simulations/out/" + TEST_PREFIX +
+                            # DOWNSAMPLE_ERRFREE_OUTDIR = (os.path.dirname(os.path.realpath(__file__)) + os.sep +"simulations/out/" + TEST_PREFIX +
                             #                         "/consensus/window" + str(WINDOW_SIZE) + ".errFree.downsample")
                             # DOWNSAMPLE_ERRFREE_ACTUAL_DNDS_CSV = DOWNSAMPLE_ERRFREE_OUTDIR + os.sep + 'actual_dnds_by_site.csv'
                             # DOWNSAMPLE_ERRFREE_COLLATE_OUTPUT_CSV = DOWNSAMPLE_ERRFREE_OUTDIR + os.sep + 'collate_dnds.csv'
@@ -363,7 +363,7 @@ if __name__ == "__main__":
                             #
                             # # What happens when we downsample the error free windows with the same sequences at the typical windows
                             # #   AND N-mask the same bases as the typical windows?
-                            # DOWNSAMPLE_NMASK_ERRFREE_OUTDIR = (os.path.dirname(__file__) + os.sep +"simulations/out/" + TEST_PREFIX +
+                            # DOWNSAMPLE_NMASK_ERRFREE_OUTDIR = (os.path.dirname(os.path.realpath(__file__)) + os.sep +"simulations/out/" + TEST_PREFIX +
                             #                         "/consensus/window" + str(WINDOW_SIZE) + ".errFree.downsample.Nmask")
                             # DOWNSAMPLE_NMASK_ERRFREE_ACTUAL_DNDS_CSV = DOWNSAMPLE_NMASK_ERRFREE_OUTDIR + os.sep + 'actual_dnds_by_site.csv'
                             # DOWNSAMPLE_NMASK_ERRFREE_COLLATE_OUTPUT_CSV = DOWNSAMPLE_NMASK_ERRFREE_OUTDIR + os.sep + 'collate_dnds.csv'
@@ -385,7 +385,7 @@ if __name__ == "__main__":
                             # # What happens when we downsample the error free windows with the same sequences at the typical windows
                             # #   AND N-mask the same bases as the typical windows
                             # #   AND left/right pad the same bases as the typical windows?
-                            # DOWNSAMPLE_NMASK_PAD_ERRFREE_OUTDIR = (os.path.dirname(__file__) + os.sep +"simulations/out/" + TEST_PREFIX +
+                            # DOWNSAMPLE_NMASK_PAD_ERRFREE_OUTDIR = (os.path.dirname(os.path.realpath(__file__)) + os.sep +"simulations/out/" + TEST_PREFIX +
                             #                         "/consensus/window" + str(window_size) + ".errFree.downsample.Nmask.pad")
                             # DOWNSAMPLE_NMASK_PAD_ERRFREE_ACTUAL_DNDS_CSV = DOWNSAMPLE_NMASK_PAD_ERRFREE_OUTDIR + os.sep + 'actual_dnds_by_site.csv'
                             # DOWNSAMPLE_NMASK_PAD_ERRFREE_COLLATE_OUTPUT_CSV = DOWNSAMPLE_NMASK_PAD_ERRFREE_OUTDIR + os.sep + 'collate_dnds.csv'
