@@ -95,14 +95,14 @@ def do_collate(outdir, output_csv, ref_fasta, full_popn_fasta,expected_dnds_file
         fh_out_config.write("ALN_CONSERVE_CSV=" + aln_conserve_csv + "\n")
 
     
-    subprocess.check_call(["Rscript", "-e",
-                           ("library(knitr); " +
-                            "setwd('{}'); ".format(Rscript_wdir) +
-                            "spin('aggreg_window.R', knit=FALSE); " +
-                            "knit2html('./aggreg_window.Rmd', stylesheet='./markdown_bigwidth.css')")],
-                          shell=False, env=os.environ)
-    shutil.copy(Rscript_wdir + os.sep + "aggreg_window.html",
-                outdir + os.sep + "aggreg_window.html")
+    # subprocess.check_call(["Rscript", "-e",
+    #                        ("library(knitr); " +
+    #                         "setwd('{}'); ".format(Rscript_wdir) +
+    #                         "spin('aggreg_window.R', knit=FALSE); " +
+    #                         "knit2html('./aggreg_window.Rmd', stylesheet='./markdown_bigwidth.css')")],
+    #                       shell=False, env=os.environ)
+    # shutil.copy(Rscript_wdir + os.sep + "aggreg_window.html",
+    #             outdir + os.sep + "aggreg_window.html")
 
 def filter_fasta(in_fasta, keep_names, out_fasta):
     """
