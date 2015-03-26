@@ -281,9 +281,19 @@ if __name__ == "__main__":
                     for breadth in [0.6, 0.75, 0.875]:
                         for depth in [0.1*indiv, 0.25*indiv, 0.5*indiv]:
                             # Generate simulated data
+                            # Hack to speed things up.
+
+
                             TEST_PREFIX = TEST_PREFIX_FORMAT.format(cov, indiv, codonsites, window_size, breadth, depth)
                             config_file = SIM_DATA_DIR + os.sep + TEST_PREFIX + os.sep + TEST_PREFIX + ".config"
                             LOGGER.debug("Handling simulated config " + config_file)
+
+                            umberjack_html =   os.path.dirname(os.path.realpath(__file__)) + os.sep +"simulations/out/" + TEST_PREFIX + "/consensus/window" + str(window_size)
+                            errfree_umberjack_html =   os.path.dirname(os.path.realpath(__file__)) + os.sep +"simulations/out/" + TEST_PREFIX + "/consensus/window" + str(window_size) +  ".errFree"
+                            if os.path.exists(umberjack_html) and os.path.getsize(umberjack_html) and os.path.exists(errfree_umberjack_html) and os.path.getsize(errfree_umberjack_html):
+                                LOGGER.warn("Not redoing simulations for " + config_file)
+                                continue
+
                             gen_sim_data(config_file, indiv, codonsites, cov, window_size, breadth, depth)
 
 
