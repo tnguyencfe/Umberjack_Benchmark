@@ -6,12 +6,24 @@ import hyphy.hyphy_handler as hyphy_handler
 import Bio.SeqIO as SeqIO
 import re
 import math
+import fnmatch
+from collections import namedtuple
+import config.settings as settings
+import logging
+import multiprocessing
+import subprocess
+settings.setup_logging()
 
+LOGGER = logging.getLogger(__name__)
+LOGGER.propagate = 1
+
+PROCS = 6
 def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None):
     """
     Collects everything related to dnds into 1 table.  Does not do any aggregation of values.  Useful for debugging.
     :return:
     """
+    LOGGER.debug("Collect dnds for " + output_csv_filename)
     with open(output_csv_filename, 'w') as fh_out:
         if comments:
             fh_out.write(comments)
@@ -49,6 +61,8 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
 
             tree_filename = slice_fasta_filename.replace(".fasta", ".tree")
             if os.path.exists(tree_filename):
+                # NB:  FastTree tree length in nucleotide substitutions / site.  HyPhy converts trees to codon substitution/site to count codon substitutions along phylogeny
+                # Parse the HyPhy dnds tsv to get dN, dS,
                 tree_len, tree_depth = Utility.get_tree_len_depth(tree_filename)
             else:
                 tree_len = None
@@ -77,13 +91,14 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
             if os.path.exists(dnds_tsv_filename):
                 with open(dnds_tsv_filename, 'rU') as fh_dnds_tsv:
                     reader = csv.DictReader(fh_dnds_tsv, delimiter='\t')
-                    for offset, codon_row in enumerate(reader):    # Every codon site is a row in the *.dnds.tsv file
-                        outrow["CodonSite"] = win_start_codon_1based_wrt_ref + offset
-                        outrow["CodonDepth"] = codons_by_window_pos[offset]
-                        outrow["Conserve"] = consensus.get_ave_conserve(offset, offset + Utility.NUC_PER_CODON, is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
-                        outrow["Entropy"] = consensus.get_ave_shannon_entropy(offset, offset + Utility.NUC_PER_CODON, is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
-                        outrow["ConserveTrueBase"] = consensus.get_ave_conserve(offset, offset + Utility.NUC_PER_CODON, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
-                        outrow["EntropyTrueBase"] = consensus.get_ave_shannon_entropy(offset, offset + Utility.NUC_PER_CODON, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
+                    for codonoffset_0based, codon_row in enumerate(reader):    # Every codon site is a row in the *.dnds.tsv file
+                        nucoffset_0based = codonoffset_0based*Utility.NUC_PER_CODON
+                        outrow["CodonSite"] = win_start_codon_1based_wrt_ref + codonoffset_0based
+                        outrow["CodonDepth"] = codons_by_window_pos[codonoffset_0based]
+                        outrow["Conserve"] = consensus.get_ave_conserve(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
+                        outrow["Entropy"] = consensus.get_ave_metric_entropy(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
+                        outrow["ConserveTrueBase"] = consensus.get_ave_conserve(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
+                        outrow["EntropyTrueBase"] = consensus.get_ave_metric_entropy(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
                         outrow["N"] = float(codon_row[hyphy_handler.HYPHY_TSV_N_COL])
                         outrow["S"] = float(codon_row[hyphy_handler.HYPHY_TSV_S_COL])
                         outrow["ES"] = float(codon_row[hyphy_handler.HYPHY_TSV_EXP_S_COL])
@@ -92,31 +107,32 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
                         outrow["dS"] = float(codon_row[hyphy_handler.HYPHY_TSV_DS_COL])
                         outrow["dN_minus_dS"] = float(codon_row[hyphy_handler.HYPHY_TSV_SCALED_DN_MINUS_DS_COL])
 
-                        outrow["AmbigBase"] = ns[offset]
-                        outrow["Pad"] = pad[offset]
-                        outrow["Err"] = seq_err[offset]
-                        outrow["Err_N"] = err_aa_change[offset]
-                        outrow["Err_S"] = err_aa_nochange[offset]
-                        outrow["Ambig_N"] = ambig_aa_change[offset]
-                        outrow["Ambig_S"] = ambig_aa_nochange[offset]
+                        outrow["AmbigBase"] = ns[codonoffset_0based]
+                        outrow["Pad"] = pad[codonoffset_0based]
+                        outrow["Err"] = seq_err[codonoffset_0based]
+                        outrow["Err_N"] = err_aa_change[codonoffset_0based]
+                        outrow["Err_S"] = err_aa_nochange[codonoffset_0based]
+                        outrow["Ambig_N"] = ambig_aa_change[codonoffset_0based]
+                        outrow["Ambig_S"] = ambig_aa_nochange[codonoffset_0based]
                         outrow["TreeLen"] = tree_len
                         outrow["TreeDepth"] = tree_depth
                         writer.writerow(outrow)
             else:
-                for offset, codons in enumerate(codons_by_window_pos):
-                    outrow["CodonSite"] = win_start_codon_1based_wrt_ref + offset
+                for codonoffset_0based, codons in enumerate(codons_by_window_pos):
+                    nucoffset_0based = codonoffset_0based*Utility.NUC_PER_CODON
+                    outrow["CodonSite"] = win_start_codon_1based_wrt_ref + codonoffset_0based
                     outrow["CodonDepth"] = codons
-                    outrow["Conserve"] = consensus.get_ave_conserve(offset, offset + Utility.NUC_PER_CODON, is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
-                    outrow["Entropy"] = consensus.get_ave_shannon_entropy(offset, offset + Utility.NUC_PER_CODON, is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
-                    outrow["ConserveTrueBase"] = consensus.get_ave_conserve(offset, offset + Utility.NUC_PER_CODON, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
-                    outrow["EntropyTrueBase"] = consensus.get_ave_shannon_entropy(offset, offset + Utility.NUC_PER_CODON, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
-                    outrow["AmbigBase"] = ns[offset]
-                    outrow["Pad"] = pad[offset]
-                    outrow["Err"] = seq_err[offset]
-                    outrow["Err_N"] = err_aa_change[offset]
-                    outrow["Err_S"] = err_aa_nochange[offset]
-                    outrow["Ambig_N"] = ambig_aa_change[offset]
-                    outrow["Ambig_S"] = ambig_aa_nochange[offset]
+                    outrow["Conserve"] = consensus.get_ave_conserve(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
+                    outrow["Entropy"] = consensus.get_ave_metric_entropy(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
+                    outrow["ConserveTrueBase"] = consensus.get_ave_conserve(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
+                    outrow["EntropyTrueBase"] = consensus.get_ave_metric_entropy(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
+                    outrow["AmbigBase"] = ns[codonoffset_0based]
+                    outrow["Pad"] = pad[codonoffset_0based]
+                    outrow["Err"] = seq_err[codonoffset_0based]
+                    outrow["Err_N"] = err_aa_change[codonoffset_0based]
+                    outrow["Err_S"] = err_aa_nochange[codonoffset_0based]
+                    outrow["Ambig_N"] = ambig_aa_change[codonoffset_0based]
+                    outrow["Ambig_S"] = ambig_aa_nochange[codonoffset_0based]
                     outrow["TreeLen"] = tree_len
                     outrow["TreeDepth"] = tree_depth
                     writer.writerow(outrow)
@@ -191,3 +207,185 @@ def error_by_codonpos(slice_msa_fasta, slice_start_wrt_ref_1based, full_popn_fas
 
 
     return ns, pad, seq_err, err_aa_change, err_aa_nochange, ambig_aa_change, ambig_aa_nochange
+
+
+
+def make1csv(inferred_dnds_dir, sim_data_dir, output_csv_filename):
+    """
+    Puts all the collate_dnds, full population csv, expected dnds info into 1 csv for checking what causes inaccurate
+    inferred dn/ds.
+    Careful - there is about 514MB worth of collatednds csv data
+    :return:
+    """
+    FullPopnCons = namedtuple("FullPopnCons", ["Conservation", "Entropy"])
+    FullPopnDnDs = namedtuple("FullPopnDnDs", ["N", "S", "EN", "ES", "dNdS", "dN_minus_dS"])
+
+    LOGGER.debug("Writing all collated inferred, expected dnds to " + output_csv_filename)
+    with open(output_csv_filename, 'w') as fh_out:
+        writer = csv.DictWriter(fh_out, fieldnames=["Window_Start", "Window_End", "CodonSite",
+                                                    "File",
+                                            "Reads.Act", "UnambigCodons.Act",
+                                            "PopSize.Act",  # Coverage per individual
+                                            "ConserveTrueBase.Act", "EntropyTrueBase.Act",
+                                            "AmbigPadBase.Act", "ErrBase.Act",
+                                            "N.Act", "S.Act", "EN.Act", "ES.Act", "dNdS.Act", "dN_minus_dS.Act",
+                                            "ConserveTrueBase.Exp", "EntropyTrueBase.Exp",
+                                            "N.Exp", "S.Exp", "EN.Exp", "ES.Exp", "dNdS.Exp", "dN_minus_dS.Exp"])
+        writer.writeheader()
+        for dirpath, dirnames, filenames in  os.walk(inferred_dnds_dir):
+            for filename in fnmatch.filter(filenames, "collate_dnds.csv"):
+                sim_config_name = os.path.basename(os.path.abspath(dirpath + os.sep + os.pardir + os.sep + os.pardir))  # /home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/small.cov2.indiv3000.codon500.window200.breadth0.75.depth300.0
+                LOGGER.debug("sim_config_name=" + sim_config_name)
+                inferred_collate_dnds_csv = dirpath + os.sep + filename
+                # /home/thuy/gitrepo/Umberjack_Benchmark/simulations/data/small.cov1.indiv1000.codon500.window200.breadth0.6.depth100.0/mixed/small.cov1.indiv1000.codon500.window200.breadth0.6.depth100.0.mixed.dnds.tsv
+                full_popn_dnds_tsv = sim_data_dir + os.sep + sim_config_name + os.sep + "mixed" + os.sep + sim_config_name + ".mixed.dnds.tsv"
+                # /home/thuy/gitrepo/Umberjack_Benchmark/simulations/data/small.cov1.indiv1000.codon500.window200.breadth0.6.depth100.0/mixed/small.cov1.indiv1000.codon500.window200.breadth0.6.depth100.0.mixed.conserve.csv
+                full_popn_conserve_csv = sim_data_dir + os.sep + sim_config_name + os.sep + "mixed" + os.sep + sim_config_name + ".mixed.conserve.csv"
+                full_popn_fasta = sim_data_dir + os.sep + sim_config_name + os.sep + "mixed" + os.sep + sim_config_name + ".mixed.fasta"
+                LOGGER.debug("Merge Inferred collated dnds=" + dirpath + os.sep + filename)
+                LOGGER.debug("Merge Sim inferred dnds csv = " + inferred_collate_dnds_csv)
+                LOGGER.debug("Merge Sim expected dnds tsv = " + full_popn_dnds_tsv)
+                LOGGER.debug("Merge Sim expected conservation csv = " + full_popn_conserve_csv)
+                LOGGER.debug("Merge Sim full popn fasta = " + full_popn_fasta)
+
+                #NucSite	Conserve	Entropy	NucDepth	CodonDepth
+                codonsite_2_full_cons= dict()
+                with open(full_popn_conserve_csv, 'rU') as fh_full_cons:
+                    full_cons_reader = csv.DictReader(fh_full_cons)
+
+                    total_cons = 0.0
+                    total_ent = 0.0
+                    for row_idx, row in enumerate(full_cons_reader):
+                        nucsite = int(row["NucSite"])
+                        total_cons += float(row["Conserve"])
+                        total_ent += float(row["Entropy"])
+                        if nucsite-1 != row_idx:
+                            raise ValueError("Error in nuc site indexing in " + full_popn_conserve_csv)
+                        if nucsite % 3 == 0:
+                            codonsite = nucsite/3
+                            codon_ave_cons = total_cons/3.0
+                            codon_ave_ent = total_ent/3.0
+                            full_popn_cons = FullPopnCons(Conservation=codon_ave_cons, Entropy=codon_ave_ent)
+                            codonsite_2_full_cons[codonsite] = full_popn_cons
+                            total_cons = 0.0
+                            total_ent = 0.0
+
+                # Observed S Changes	Observed NS Changes	E[S Sites]	E[NS Sites]	Observed S. Prop.	P{S}	dS	dN	dN-dS	P{S leq. observed}	P{S geq. observed}	Scaled dN-dS
+                codonsite_2_full_dnds= dict()
+                with open(full_popn_dnds_tsv, 'rU') as fh_full_dnds:
+                    full_dnds_reader = csv.DictReader(fh_full_dnds, delimiter="\t")
+                    for row_idx, row in enumerate(full_dnds_reader):
+                        codonsite = row_idx+1
+                        if float(row[hyphy_handler.HYPHY_TSV_DS_COL]):
+                            dnds = float(row[hyphy_handler.HYPHY_TSV_DN_COL])/float(row[hyphy_handler.HYPHY_TSV_DS_COL])
+                        else:
+                            dnds = None
+                        dN_minus_dS = row[hyphy_handler.HYPHY_TSV_SCALED_DN_MINUS_DS_COL]
+                        full_popn_dnds = FullPopnDnDs(N=row[hyphy_handler.HYPHY_TSV_N_COL], S=row[hyphy_handler.HYPHY_TSV_S_COL],
+                                                      EN=row[hyphy_handler.HYPHY_TSV_EXP_N_COL], ES=row[hyphy_handler.HYPHY_TSV_EXP_S_COL],
+                                                      dNdS=dnds, dN_minus_dS=dN_minus_dS)
+                        codonsite_2_full_dnds[codonsite] = full_popn_dnds
+
+                if len(codonsite_2_full_dnds.keys()) != len(codonsite_2_full_cons.keys()):
+                    raise ValueError("full population dnds does not have same number of codon sites as conservation:",
+                                     full_popn_dnds_tsv, ", ", full_popn_conserve_csv)
+
+
+                total_indiv = Utility.get_total_seq_from_fasta(full_popn_fasta)
+                #Window_Start, Window_End, Reads, CodonSite, CodonDepth, ConserveTrueBase, EntropyTrueBase, N, S, dN, dS, AmbigBase, Pad, Err
+                with open(inferred_collate_dnds_csv, 'rU') as fh_inf_dnds:
+                    inf_dnds_reader = csv.DictReader(fh_inf_dnds)
+                    for row_idx, row in enumerate(inf_dnds_reader):
+                        codonsite = int(row["CodonSite"])
+                        outrow = dict()
+                        outrow["Window_Start"] = row["Window_Start"]
+                        outrow["Window_End"] = row["Window_End"]
+                        outrow["CodonSite"] = codonsite
+                        outrow["File"] = inferred_collate_dnds_csv
+                        outrow["Reads.Act"] = row["Reads"]
+                        outrow["UnambigCodons.Act"] = row["CodonDepth"]
+                        outrow["PopSize.Act"] = total_indiv
+                        outrow["ConserveTrueBase.Act"] = row["ConserveTrueBase"]
+                        outrow["EntropyTrueBase.Act"] = row["EntropyTrueBase"]
+                        outrow["AmbigPadBase.Act"] = int(row["AmbigBase"]) + int(row["Pad"])
+                        outrow["ErrBase.Act"] = int(row["Err"])
+                        # If it never made it past FastTree into hyphy, then the substitutions will be empty string
+                        if row["N"] != "" and row["S"] != "":
+                            outrow["N.Act"] = float(row["N"])
+                            outrow["S.Act"] = float(row["S"])
+                            outrow["EN.Act"] = float(row["EN"])
+                            outrow["ES.Act"] = float(row["ES"])
+                            if row["dS"] and float(row["dS"]) != 0:
+                                outrow["dNdS.Act"] = float(row["dN"])/float(row["dS"])
+
+                            outrow["dN_minus_dS.Act"] = row["dN_minus_dS"]
+
+                        if not codonsite_2_full_cons.get(codonsite):
+                            raise ValueError("Missing codon site" + str(codonsite) + " in " + full_popn_conserve_csv)
+                        outrow["ConserveTrueBase.Exp"] = codonsite_2_full_cons[codonsite].Conservation
+                        outrow["EntropyTrueBase.Exp"] = codonsite_2_full_cons[codonsite].Entropy
+
+                        if not codonsite_2_full_dnds.get(codonsite):
+                            raise ValueError("Missing codon site" + str(codonsite) + " in " + inferred_collate_dnds_csv)
+                        outrow["N.Exp"] = codonsite_2_full_dnds[codonsite].N
+                        outrow["S.Exp"] = codonsite_2_full_dnds[codonsite].S
+                        outrow["EN.Exp"] = codonsite_2_full_dnds[codonsite].EN
+                        outrow["ES.Exp"] = codonsite_2_full_dnds[codonsite].ES
+                        outrow["dNdS.Exp"] = codonsite_2_full_dnds[codonsite].dNdS
+                        outrow["dN_minus_dS.Exp"] = codonsite_2_full_dnds[codonsite].dN_minus_dS
+                        writer.writerow(outrow)
+
+
+def collect_dnds_helper(args):
+    """
+    Calls collect_dnds() using keyword args
+    :param args:
+    :return:
+    """
+    return collect_dnds(**args)
+
+def recollect_dnds_all(all_inferred_dnds_dir, sim_data_dir):
+    """
+    Recollects the collate_dnds.csv info
+    :param all_inferred_dnds_dir:
+    :param sim_data_dir:
+    :return:
+    """
+    pool = multiprocessing.Pool(PROCS)
+    args_itr = []
+
+    for dirpath, dirnames, filenames in  os.walk(all_inferred_dnds_dir):
+        for filename in fnmatch.filter(filenames, "collate_dnds.csv"):
+            sim_config_name = os.path.basename(os.path.abspath(dirpath + os.sep + os.pardir + os.sep + os.pardir))  # /home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/small.cov2.indiv3000.codon500.window200.breadth0.75.depth300.0
+            LOGGER.debug("sim_config_name=" + sim_config_name)
+            inferred_collate_dnds_csv = dirpath + os.sep + filename
+            # /home/thuy/gitrepo/Umberjack_Benchmark/simulations/data/small.cov1.indiv1000.codon500.window200.breadth0.6.depth100.0/mixed/small.cov1.indiv1000.codon500.window200.breadth0.6.depth100.0.mixed.fasta
+            full_popn_fasta = sim_data_dir + os.sep + sim_config_name + os.sep + "mixed" + os.sep + sim_config_name + ".mixed.fasta"
+
+            LOGGER.debug("Recollating Inferred collated dnds=" + inferred_collate_dnds_csv)
+            LOGGER.debug("Recollating Sim Full Popn Fasta = " + full_popn_fasta)
+
+            args_itr.append(dict(output_dir=dirpath, output_csv_filename=inferred_collate_dnds_csv, full_popn_fasta=full_popn_fasta))
+
+    for result in pool.imap_unordered(collect_dnds_helper, args_itr, 1):
+        pass
+
+    pool.terminate()
+
+
+if __name__ == "__main__":
+    SIM_OUT_DIR = "/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out"
+    SIM_DATA_DIR = "/home/thuy/gitrepo/Umberjack_Benchmark/simulations/data"
+    OUTPUT_INF_EXP_COLLATE_CSV = SIM_OUT_DIR + os.sep + "collate_all.csv"
+    # recollect_dnds_all(all_inferred_dnds_dir=SIM_OUT_DIR, sim_data_dir=SIM_DATA_DIR)
+    # make1csv(inferred_dnds_dir=SIM_OUT_DIR, sim_data_dir=SIM_DATA_DIR, output_csv_filename=OUTPUT_INF_EXP_COLLATE_CSV)
+
+    LOGGER.debug("About to generate rhtml")
+    Rscript_wdir =  os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep + "R")
+    subprocess.check_call(["Rscript", "-e",
+                           ("library(knitr); " +
+                            "setwd('{}'); ".format(Rscript_wdir) +
+                            "spin('find_covar_accuracy_multisample.R', knit=FALSE); " +
+                            "knit2html('./find_covar_accuracy_multisample.Rmd', stylesheet='./markdown_bigwidth.css')")],
+                          shell=False, env=os.environ)
+    LOGGER.debug("Done generate rhtml")
