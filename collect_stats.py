@@ -248,6 +248,8 @@ def make1csv(inferred_dnds_dir, sim_data_dir, output_csv_filename):
                 LOGGER.debug("Merge Sim expected conservation csv = " + full_popn_conserve_csv)
                 LOGGER.debug("Merge Sim full popn fasta = " + full_popn_fasta)
 
+                total_indiv = Utility.get_total_seq_from_fasta(full_popn_fasta)
+
                 #NucSite	Conserve	Entropy	NucDepth	CodonDepth
                 codonsite_2_full_cons= dict()
                 with open(full_popn_conserve_csv, 'rU') as fh_full_cons:
@@ -264,7 +266,7 @@ def make1csv(inferred_dnds_dir, sim_data_dir, output_csv_filename):
                         if nucsite % 3 == 0:
                             codonsite = nucsite/3
                             codon_ave_cons = total_cons/3.0
-                            codon_ave_ent = total_ent/3.0
+                            codon_ave_ent = total_ent/3.0 / math.log(total_indiv)  # hack because these were not metric entorpy values
                             full_popn_cons = FullPopnCons(Conservation=codon_ave_cons, Entropy=codon_ave_ent)
                             codonsite_2_full_cons[codonsite] = full_popn_cons
                             total_cons = 0.0
@@ -291,7 +293,7 @@ def make1csv(inferred_dnds_dir, sim_data_dir, output_csv_filename):
                                      full_popn_dnds_tsv, ", ", full_popn_conserve_csv)
 
 
-                total_indiv = Utility.get_total_seq_from_fasta(full_popn_fasta)
+
                 #Window_Start, Window_End, Reads, CodonSite, CodonDepth, ConserveTrueBase, EntropyTrueBase, N, S, dN, dS, AmbigBase, Pad, Err
                 with open(inferred_collate_dnds_csv, 'rU') as fh_inf_dnds:
                     inf_dnds_reader = csv.DictReader(fh_inf_dnds)
@@ -377,8 +379,8 @@ if __name__ == "__main__":
     SIM_OUT_DIR = "/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out"
     SIM_DATA_DIR = "/home/thuy/gitrepo/Umberjack_Benchmark/simulations/data"
     OUTPUT_INF_EXP_COLLATE_CSV = SIM_OUT_DIR + os.sep + "collate_all.csv"
-    # recollect_dnds_all(all_inferred_dnds_dir=SIM_OUT_DIR, sim_data_dir=SIM_DATA_DIR)
-    # make1csv(inferred_dnds_dir=SIM_OUT_DIR, sim_data_dir=SIM_DATA_DIR, output_csv_filename=OUTPUT_INF_EXP_COLLATE_CSV)
+    recollect_dnds_all(all_inferred_dnds_dir=SIM_OUT_DIR, sim_data_dir=SIM_DATA_DIR)
+    make1csv(inferred_dnds_dir=SIM_OUT_DIR, sim_data_dir=SIM_DATA_DIR, output_csv_filename=OUTPUT_INF_EXP_COLLATE_CSV)
 
     LOGGER.debug("About to generate rhtml")
     Rscript_wdir =  os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep + "R")
