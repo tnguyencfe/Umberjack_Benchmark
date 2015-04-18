@@ -12,12 +12,37 @@ import config.settings as settings
 import logging
 import multiprocessing
 import subprocess
+import Bio.Phylo as Phylo
 settings.setup_logging()
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.propagate = 1
 
 PROCS = 6
+
+def get_tree_len_depth(treefilename):
+    """
+    Returns tuple of (sum of all branch lengths in tree (excluding root branch), deepest root to tip distance)
+    :param treefilename:
+    :return: total branch length sum of tree (excluding root branch), deepest root to tip distance
+    :rtype: (float, float)
+    """
+    tree = Phylo.read(treefilename, "newick")
+
+    root_branch_length = tree.clade.branch_length if not tree.clade.branch_length is None else 0  # set to 1.0  for some odd reason
+    tree_branch_length  = tree.clade.total_branch_length()  # sum of all branch lengths including root branch length
+    unroot_tree_len = tree_branch_length  - root_branch_length
+    clade_depths = tree.depths()
+    longest_depth = 0.0
+
+    for clade, depth in clade_depths.iteritems():
+        if clade.is_terminal():
+            if longest_depth < depth:
+                longest_depth = depth
+
+    return unroot_tree_len, longest_depth
+
+
 def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None):
     """
     Collects everything related to dnds into 1 table.  Does not do any aggregation of values.  Useful for debugging.
@@ -63,7 +88,7 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
             if os.path.exists(tree_filename):
                 # NB:  FastTree tree length in nucleotide substitutions / site.  HyPhy converts trees to codon substitution/site to count codon substitutions along phylogeny
                 # Parse the HyPhy dnds tsv to get dN, dS,
-                tree_len, tree_depth = Utility.get_tree_len_depth(tree_filename)
+                tree_len, tree_depth = get_tree_len_depth(tree_filename)
             else:
                 tree_len = None
                 tree_depth = None
@@ -74,11 +99,23 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
             # Window starts at this 1-based codon position with respect to the reference
             win_start_codon_1based_wrt_ref = win_start_nuc_pos_1based_wrt_ref/Utility.NUC_PER_CODON + 1
 
+            # TODO:  Hack to remove windows that are less than the expected size.  Remove this once ubmerjack fixed
+            actual_win_size = win_end_nuc_pos_1based_wrt_ref - win_start_nuc_pos_1based_wrt_ref + 1
 
-            codons_by_window_pos = Utility.get_total_codons_by_pos(msa_fasta_filename=slice_fasta_filename)
+            win_size_match = re.search(pattern=r"window(\d+)", string=os.path.basename(os.path.abspath(os.path.dirname(slice_fasta_filename))))
+            if win_size_match:
+                desired_win_size = int(win_size_match.group(1))
+            else:
+                raise ValueError("Window Slice fasta does not obey execpted naming convention for simulated data " + slice_fasta_filename)
+            if desired_win_size != actual_win_size:
+                LOGGER.warn("Slice fasta is not desired window size=" + str(desired_win_size) + " slicefasta=" + slice_fasta_filename)
+                continue
+
             reads = Utility.get_total_seq_from_fasta(slice_fasta_filename)
             consensus = Utility.Consensus()
             consensus.parse(slice_fasta_filename)
+
+            total_codons = consensus.get_alignment_len()/Utility.NUC_PER_CODON # if the last codon doesn't have enuf chars, then hyphy ignores it
 
             ns, pad, seq_err, err_aa_change, err_aa_nochange, ambig_aa_change, ambig_aa_nochange = error_by_codonpos(slice_fasta_filename, win_start_nuc_pos_1based_wrt_ref, full_popn_fasta)
 
@@ -94,7 +131,7 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
                     for codonoffset_0based, codon_row in enumerate(reader):    # Every codon site is a row in the *.dnds.tsv file
                         nucoffset_0based = codonoffset_0based*Utility.NUC_PER_CODON
                         outrow["CodonSite"] = win_start_codon_1based_wrt_ref + codonoffset_0based
-                        outrow["CodonDepth"] = codons_by_window_pos[codonoffset_0based]
+                        outrow["CodonDepth"] = consensus.get_codon_depth(codon_pos_0based=codonoffset_0based, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
                         outrow["Conserve"] = consensus.get_ave_conserve(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
                         outrow["Entropy"] = consensus.get_ave_metric_entropy(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
                         outrow["ConserveTrueBase"] = consensus.get_ave_conserve(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
@@ -118,10 +155,10 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
                         outrow["TreeDepth"] = tree_depth
                         writer.writerow(outrow)
             else:
-                for codonoffset_0based, codons in enumerate(codons_by_window_pos):
+                for codonoffset_0based in range(total_codons):
                     nucoffset_0based = codonoffset_0based*Utility.NUC_PER_CODON
                     outrow["CodonSite"] = win_start_codon_1based_wrt_ref + codonoffset_0based
-                    outrow["CodonDepth"] = codons
+                    outrow["CodonDepth"] = consensus.get_codon_depth(codon_pos_0based=codonoffset_0based, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
                     outrow["Conserve"] = consensus.get_ave_conserve(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
                     outrow["Entropy"] = consensus.get_ave_metric_entropy(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
                     outrow["ConserveTrueBase"] = consensus.get_ave_conserve(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
@@ -146,7 +183,7 @@ def error_by_codonpos(slice_msa_fasta, slice_start_wrt_ref_1based, full_popn_fas
 
 
     longest_seq = Utility.get_longest_seq_size_from_fasta(slice_msa_fasta)
-    total_codons = int(math.ceil(float(longest_seq)/Utility.NUC_PER_CODON))
+    total_codons = longest_seq/Utility.NUC_PER_CODON  # don't include the last codon if it isn't fully 3 chars long
     ns = [0] * total_codons
     pad = [0] * total_codons
     seq_err = [0] * total_codons
@@ -172,8 +209,12 @@ def error_by_codonpos(slice_msa_fasta, slice_start_wrt_ref_1based, full_popn_fas
 
         # NB:  the nonpadded portion of the read might not start on a codon, but the MSA should always start on a codon
         for nuc_pos_wrt_slice_0based in range(0, longest_seq, Utility.NUC_PER_CODON):
+
+            # Ignore codons that aren't fully 3 characters long - this is what hyphy does
+            if longest_seq - nuc_pos_wrt_slice_0based < Utility.NUC_PER_CODON:
+                continue
             read_codon = str(record.seq[nuc_pos_wrt_slice_0based:nuc_pos_wrt_slice_0based + Utility.NUC_PER_CODON])
-            read_codon += "-" * (Utility.NUC_PER_CODON - len(read_codon))  # right-pad with gaps in case the nucleotide sequence doesn't end on codon end
+
 
             nuc_pos_wrt_ref_0based = slice_start_wrt_ref_1based-1 + nuc_pos_wrt_slice_0based
             template_codon = str(full_popn_recdict[template].seq[nuc_pos_wrt_ref_0based:nuc_pos_wrt_ref_0based + Utility.NUC_PER_CODON])
@@ -220,6 +261,8 @@ def make1csv(inferred_dnds_dir, sim_data_dir, output_csv_filename):
     FullPopnCons = namedtuple("FullPopnCons", ["Conservation", "Entropy"])
     FullPopnDnDs = namedtuple("FullPopnDnDs", ["N", "S", "EN", "ES", "dNdS", "dN_minus_dS"])
 
+
+
     LOGGER.debug("Writing all collated inferred, expected dnds to " + output_csv_filename)
     with open(output_csv_filename, 'w') as fh_out:
         writer = csv.DictWriter(fh_out, fieldnames=["Window_Start", "Window_End", "CodonSite",
@@ -230,18 +273,43 @@ def make1csv(inferred_dnds_dir, sim_data_dir, output_csv_filename):
                                             "AmbigPadBase.Act", "ErrBase.Act",
                                             "N.Act", "S.Act", "EN.Act", "ES.Act", "dNdS.Act", "dN_minus_dS.Act",
                                             "ConserveTrueBase.Exp", "EntropyTrueBase.Exp",
-                                            "N.Exp", "S.Exp", "EN.Exp", "ES.Exp", "dNdS.Exp", "dN_minus_dS.Exp"])
+                                            "N.Exp", "S.Exp", "EN.Exp", "ES.Exp", "dNdS.Exp", "dN_minus_dS.Exp",
+                                            "BreadthThresh", "DepthThresh"])
         writer.writeheader()
         for dirpath, dirnames, filenames in  os.walk(inferred_dnds_dir):
             for filename in fnmatch.filter(filenames, "collate_dnds.csv"):
-                sim_config_name = os.path.basename(os.path.abspath(dirpath + os.sep + os.pardir + os.sep + os.pardir))  # /home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/small.cov2.indiv3000.codon500.window200.breadth0.75.depth300.0
-                LOGGER.debug("sim_config_name=" + sim_config_name)
+                # /home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/small.cov2.indiv3000.codon500/consensus/window200.breadth0.75.depth300.0
+                sim_popn_name = os.path.basename(os.path.abspath(dirpath + os.sep + os.pardir + os.sep + os.pardir))
+                window_traits = os.path.basename(dirpath)
+
+                LOGGER.debug("sim_popn_name=" + sim_popn_name)
+                if sim_popn_name != "small.cov2.indiv1000.codon400":  # TODO:  unhack me
+                    continue
+
+                # small.cov1.indiv1000.codon500.window200.breadth0.6.depth100.0
+                breadth = None
+                depth = None
+                indiv = None
+                #matches = re.search(pattern=r"\.indiv(\d+)\.codon.*\.breadth(0\.\d+)\.depth(\d+)", string=sim_config_name)
+                indiv_match = re.search(pattern=r"\.indiv(\d+)\.", string=sim_popn_name)
+                if indiv_match:
+                    indiv = int(indiv_match.group(1))
+                else:
+                    raise ValueError("Sim name doesn't obey convention " + sim_popn_name)
+
+                window_matches = re.search(pattern=r"\.breadth(0\.\d+)\.depth(\d+)", string=window_traits)
+                if window_matches:
+                    breadth = float(window_matches.group(1))
+                    depth = float(window_matches.group(2))/indiv
+                else:
+                    raise ValueError("Window traits dir name doesn't obey convention " + window_traits)
+
                 inferred_collate_dnds_csv = dirpath + os.sep + filename
                 # /home/thuy/gitrepo/Umberjack_Benchmark/simulations/data/small.cov1.indiv1000.codon500.window200.breadth0.6.depth100.0/mixed/small.cov1.indiv1000.codon500.window200.breadth0.6.depth100.0.mixed.dnds.tsv
-                full_popn_dnds_tsv = sim_data_dir + os.sep + sim_config_name + os.sep + "mixed" + os.sep + sim_config_name + ".mixed.dnds.tsv"
+                full_popn_dnds_tsv = sim_data_dir + os.sep + sim_popn_name + os.sep + "mixed" + os.sep + sim_popn_name + ".mixed.dnds.tsv"
                 # /home/thuy/gitrepo/Umberjack_Benchmark/simulations/data/small.cov1.indiv1000.codon500.window200.breadth0.6.depth100.0/mixed/small.cov1.indiv1000.codon500.window200.breadth0.6.depth100.0.mixed.conserve.csv
-                full_popn_conserve_csv = sim_data_dir + os.sep + sim_config_name + os.sep + "mixed" + os.sep + sim_config_name + ".mixed.conserve.csv"
-                full_popn_fasta = sim_data_dir + os.sep + sim_config_name + os.sep + "mixed" + os.sep + sim_config_name + ".mixed.fasta"
+                full_popn_conserve_csv = sim_data_dir + os.sep + sim_popn_name + os.sep + "mixed" + os.sep + sim_popn_name + ".mixed.conserve.csv"
+                full_popn_fasta = sim_data_dir + os.sep + sim_popn_name + os.sep + "mixed" + os.sep + sim_popn_name + ".mixed.fasta"
                 LOGGER.debug("Merge Inferred collated dnds=" + dirpath + os.sep + filename)
                 LOGGER.debug("Merge Sim inferred dnds csv = " + inferred_collate_dnds_csv)
                 LOGGER.debug("Merge Sim expected dnds tsv = " + full_popn_dnds_tsv)
@@ -335,6 +403,8 @@ def make1csv(inferred_dnds_dir, sim_data_dir, output_csv_filename):
                         outrow["ES.Exp"] = codonsite_2_full_dnds[codonsite].ES
                         outrow["dNdS.Exp"] = codonsite_2_full_dnds[codonsite].dNdS
                         outrow["dN_minus_dS.Exp"] = codonsite_2_full_dnds[codonsite].dN_minus_dS
+                        outrow["BreadthThresh"] = breadth
+                        outrow["DepthThresh"] = depth
                         writer.writerow(outrow)
 
 
@@ -344,7 +414,13 @@ def collect_dnds_helper(args):
     :param args:
     :return:
     """
-    return collect_dnds(**args)
+    ret_val = -1
+    try:
+        ret_val = collect_dnds(**args)
+    except Exception, e:
+        LOGGER.exception("Failure in collect_dnds with args=" + str(args))
+        raise e
+    return ret_val
 
 def recollect_dnds_all(all_inferred_dnds_dir, sim_data_dir):
     """
@@ -358,16 +434,21 @@ def recollect_dnds_all(all_inferred_dnds_dir, sim_data_dir):
 
     for dirpath, dirnames, filenames in  os.walk(all_inferred_dnds_dir):
         for filename in fnmatch.filter(filenames, "collate_dnds.csv"):
-            sim_config_name = os.path.basename(os.path.abspath(dirpath + os.sep + os.pardir + os.sep + os.pardir))  # /home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/small.cov2.indiv3000.codon500.window200.breadth0.75.depth300.0
-            LOGGER.debug("sim_config_name=" + sim_config_name)
-            inferred_collate_dnds_csv = dirpath + os.sep + filename
+
+            #/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/small.cov5.indiv1000.codon500.window350.breadth0.6.depth100.0/consensus/window350/collate_dnds.csv
+            sim_name = os.path.basename(os.path.abspath(dirpath + os.sep + os.pardir + os.sep + os.pardir))
+
+            LOGGER.debug("Recollecting sim_name=" + sim_name)
+            inferred_collate_dnds_csv = dirpath + os.sep + "collate_dnds.csv"
             # /home/thuy/gitrepo/Umberjack_Benchmark/simulations/data/small.cov1.indiv1000.codon500.window200.breadth0.6.depth100.0/mixed/small.cov1.indiv1000.codon500.window200.breadth0.6.depth100.0.mixed.fasta
-            full_popn_fasta = sim_data_dir + os.sep + sim_config_name + os.sep + "mixed" + os.sep + sim_config_name + ".mixed.fasta"
+            full_popn_fasta = sim_data_dir + os.sep + sim_name + os.sep + "mixed" + os.sep + sim_name + ".mixed.fasta"
 
             LOGGER.debug("Recollating Inferred collated dnds=" + inferred_collate_dnds_csv)
             LOGGER.debug("Recollating Sim Full Popn Fasta = " + full_popn_fasta)
 
             args_itr.append(dict(output_dir=dirpath, output_csv_filename=inferred_collate_dnds_csv, full_popn_fasta=full_popn_fasta))
+
+
 
     for result in pool.imap_unordered(collect_dnds_helper, args_itr, 1):
         pass
@@ -379,15 +460,15 @@ if __name__ == "__main__":
     SIM_OUT_DIR = "/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out"
     SIM_DATA_DIR = "/home/thuy/gitrepo/Umberjack_Benchmark/simulations/data"
     OUTPUT_INF_EXP_COLLATE_CSV = SIM_OUT_DIR + os.sep + "collate_all.csv"
-    recollect_dnds_all(all_inferred_dnds_dir=SIM_OUT_DIR, sim_data_dir=SIM_DATA_DIR)
+    #recollect_dnds_all(all_inferred_dnds_dir=SIM_OUT_DIR, sim_data_dir=SIM_DATA_DIR)
     make1csv(inferred_dnds_dir=SIM_OUT_DIR, sim_data_dir=SIM_DATA_DIR, output_csv_filename=OUTPUT_INF_EXP_COLLATE_CSV)
 
-    LOGGER.debug("About to generate rhtml")
-    Rscript_wdir =  os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep + "R")
-    subprocess.check_call(["Rscript", "-e",
-                           ("library(knitr); " +
-                            "setwd('{}'); ".format(Rscript_wdir) +
-                            "spin('find_covar_accuracy_multisample.R', knit=FALSE); " +
-                            "knit2html('./find_covar_accuracy_multisample.Rmd', stylesheet='./markdown_bigwidth.css')")],
-                          shell=False, env=os.environ)
-    LOGGER.debug("Done generate rhtml")
+    # LOGGER.debug("About to generate rhtml")
+    # Rscript_wdir =  os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep + "R")
+    # subprocess.check_call(["Rscript", "-e",
+    #                        ("library(knitr); " +
+    #                         "setwd('{}'); ".format(Rscript_wdir) +
+    #                         "spin('find_covar_accuracy_multisample.R', knit=FALSE); " +
+    #                         "knit2html('./find_covar_accuracy_multisample.Rmd', stylesheet='./markdown_bigwidth.css')")],
+    #                       shell=False, env=os.environ)
+    # LOGGER.debug("Done generate rhtml")
