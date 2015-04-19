@@ -90,11 +90,15 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
                 # Parse the HyPhy dnds tsv to get dN, dS,
                 tree_len, tree_depth = get_tree_len_depth(tree_filename)
             else:
-                tree_len = None
-                tree_depth = None
+                tree_filename = slice_fasta_filename.replace(".fasta", ".nwk")
+                tree_len, tree_depth = get_tree_len_depth(tree_filename)
 
             win_nuc_range = slice_fasta_fileprefix.split('.')[-1]
+
+
             # Window ends at this 1-based nucleotide position with respect to the reference
+            if win_nuc_range.find("_") <= 0:  # the full genome msa.fasta file won't have a window range
+                continue
             win_start_nuc_pos_1based_wrt_ref, win_end_nuc_pos_1based_wrt_ref = [int(x) for x in win_nuc_range.split('_')]
             # Window starts at this 1-based codon position with respect to the reference
             win_start_codon_1based_wrt_ref = win_start_nuc_pos_1based_wrt_ref/Utility.NUC_PER_CODON + 1
@@ -283,19 +287,18 @@ def make1csv(inferred_dnds_dir, sim_data_dir, output_csv_filename):
                 window_traits = os.path.basename(dirpath)
 
                 LOGGER.debug("sim_popn_name=" + sim_popn_name)
-                if sim_popn_name != "small.cov2.indiv1000.codon400":  # TODO:  unhack me
-                    continue
 
-                # small.cov1.indiv1000.codon500.window200.breadth0.6.depth100.0
+
+
                 breadth = None
                 depth = None
                 indiv = None
-                #matches = re.search(pattern=r"\.indiv(\d+)\.codon.*\.breadth(0\.\d+)\.depth(\d+)", string=sim_config_name)
                 indiv_match = re.search(pattern=r"\.indiv(\d+)\.", string=sim_popn_name)
                 if indiv_match:
                     indiv = int(indiv_match.group(1))
                 else:
                     raise ValueError("Sim name doesn't obey convention " + sim_popn_name)
+
 
                 window_matches = re.search(pattern=r"\.breadth(0\.\d+)\.depth(\d+)", string=window_traits)
                 if window_matches:
@@ -316,9 +319,11 @@ def make1csv(inferred_dnds_dir, sim_data_dir, output_csv_filename):
                 LOGGER.debug("Merge Sim expected conservation csv = " + full_popn_conserve_csv)
                 LOGGER.debug("Merge Sim full popn fasta = " + full_popn_fasta)
 
+
                 total_indiv = Utility.get_total_seq_from_fasta(full_popn_fasta)
 
                 #NucSite	Conserve	Entropy	NucDepth	CodonDepth
+
                 codonsite_2_full_cons= dict()
                 with open(full_popn_conserve_csv, 'rU') as fh_full_cons:
                     full_cons_reader = csv.DictReader(fh_full_cons)
@@ -433,8 +438,8 @@ def recollect_dnds_all(all_inferred_dnds_dir, sim_data_dir):
     args_itr = []
 
     for dirpath, dirnames, filenames in  os.walk(all_inferred_dnds_dir):
-        for filename in fnmatch.filter(filenames, "collate_dnds.csv"):
-
+        #for filename in fnmatch.filter(filenames, "collate_dnds.csv"):
+        for filename in fnmatch.filter(filenames, "actual_dnds_by_site.csv"):
             #/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/small.cov5.indiv1000.codon500.window350.breadth0.6.depth100.0/consensus/window350/collate_dnds.csv
             sim_name = os.path.basename(os.path.abspath(dirpath + os.sep + os.pardir + os.sep + os.pardir))
 

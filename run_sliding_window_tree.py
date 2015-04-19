@@ -80,6 +80,7 @@ def do_sliding_window(outdir, output_csv, samfilename, ref_fasta, expected_dnds_
                 outdir + os.sep + "umberjack_unit_test.html")
 
 
+
 def do_collate(outdir, output_csv, ref_fasta, full_popn_fasta,expected_dnds_filename, indelible_dnds_filename,
                full_popn_conserve_csv, orig_conserve_csv, aln_conserve_csv):
 
@@ -278,11 +279,13 @@ if __name__ == "__main__":
 
 
     TEST_PREFIX_FORMAT = "small.cov{}.indiv{}.codon{}"
-    #for cov in [1, 2, 5]:
-    for cov in [2]:
+    for cov in [1, 2, 4]:
         for indiv in [1000]:
-            for codonsites in [500]:
-            #for codonsites in [400]:
+            for codonsites in [400, 1600]:
+
+                if codonsites == 1600 and cov !=2:
+                    continue
+
                 TEST_PREFIX = TEST_PREFIX_FORMAT.format(cov, indiv, codonsites)
                 config_file = SIM_DATA_DIR + os.sep + TEST_PREFIX + os.sep + TEST_PREFIX + ".config"
                 LOGGER.debug("Handling simulated config " + config_file)
@@ -307,11 +310,16 @@ if __name__ == "__main__":
                 ERR_FREE_ORIG_CONSERVE_CSV = ORIG_CONSERVE_CSV.replace(".reads", ".reads.errFree")
                 ERR_FREE_ALN_CONSERVE_CSV = ALN_CONSERVE_CSV.replace(".reads", ".reads.errFree")
 
-                for window_size in [300]:
-                    #for breadth in [0.6, 0.75, 0.875]:
-                    for breadth in [0.875]:
-                        #for depth in [0.01*indiv, 0.05*indiv, 0.1*indiv]:
-                        for depth in [0.01 * indiv]:
+                #for window_size in [300]:
+                for window_size in [200, 300, 350]:
+                    for breadth in [0.75, 0.875, 0.9]:
+                    #for breadth in [0.875]:
+                        for depth in [0.01*indiv, 0.05*indiv, 0.1*indiv]:
+
+                            if codonsites == 1600 and window_size != 300 and breadth != 0.9 and depth != 10:
+                                continue
+
+
                             OUT_DIR =   SIM_OUT_DIR + os.sep + TEST_PREFIX + os.sep + REF + os.sep + "window{}.breadth{}.depth{}".format(window_size, breadth, depth)
                             ACTUAL_DNDS_FILENAME = OUT_DIR + os.sep + 'actual_dnds_by_site.csv'
                             COLLATE_ACT_DNDS_FILENAME = OUT_DIR + os.sep + "collate_dnds.csv"
