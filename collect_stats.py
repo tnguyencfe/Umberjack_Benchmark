@@ -57,6 +57,7 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
                                                     "Reads",  # Max read depth for the window (not necessary for the codon site)
                                                     "CodonSite",  # 1-based codon site
                                                     "CodonDepth",  # Total unambiguous codon (depth) at the codon site
+                                                    "AADepth", # Total depth of codons that code unambiguously for 1 AA.
                                                     "Conserve",  # Average per-base fraction of conservation across the codon.  Includes N's and gaps.
                                                     "Entropy",  # Average per-base metric entropy across the codon.  Includes N's and gaps.
                                                     "ConserveTrueBase",  # Average per-base fraction of conservation across the codon.  Excludes N's and gaps
@@ -91,7 +92,9 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
                 tree_len, tree_depth = get_tree_len_depth(tree_filename)
             else:
                 tree_filename = slice_fasta_filename.replace(".fasta", ".nwk")
-                tree_len, tree_depth = get_tree_len_depth(tree_filename)
+                if os.path.exists(tree_filename):
+                    tree_len, tree_depth = get_tree_len_depth(tree_filename)
+
 
             win_nuc_range = slice_fasta_fileprefix.split('.')[-1]
 
@@ -136,6 +139,7 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
                         nucoffset_0based = codonoffset_0based*Utility.NUC_PER_CODON
                         outrow["CodonSite"] = win_start_codon_1based_wrt_ref + codonoffset_0based
                         outrow["CodonDepth"] = consensus.get_codon_depth(codon_pos_0based=codonoffset_0based, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
+                        outrow["AADepth"] = consensus.get_unambig_codon2aa_depth(codon_pos_0based=codonoffset_0based)
                         outrow["Conserve"] = consensus.get_ave_conserve(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
                         outrow["Entropy"] = consensus.get_ave_metric_entropy(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
                         outrow["ConserveTrueBase"] = consensus.get_ave_conserve(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
@@ -163,6 +167,7 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
                     nucoffset_0based = codonoffset_0based*Utility.NUC_PER_CODON
                     outrow["CodonSite"] = win_start_codon_1based_wrt_ref + codonoffset_0based
                     outrow["CodonDepth"] = consensus.get_codon_depth(codon_pos_0based=codonoffset_0based, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
+                    outrow["AADepth"] = consensus.get_unambig_codon2aa_depth(codon_pos_0based=codonoffset_0based)
                     outrow["Conserve"] = consensus.get_ave_conserve(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
                     outrow["Entropy"] = consensus.get_ave_metric_entropy(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
                     outrow["ConserveTrueBase"] = consensus.get_ave_conserve(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
@@ -271,7 +276,7 @@ def make1csv(inferred_dnds_dir, sim_data_dir, output_csv_filename):
     with open(output_csv_filename, 'w') as fh_out:
         writer = csv.DictWriter(fh_out, fieldnames=["Window_Start", "Window_End", "CodonSite",
                                                     "File",
-                                            "Reads.Act", "UnambigCodons.Act",
+                                            "Reads.Act", "UnambigCodons.Act", "AADepth.Act",
                                             "PopSize.Act",  # Coverage per individual
                                             "ConserveTrueBase.Act", "EntropyTrueBase.Act",
                                             "AmbigPadBase.Act", "ErrBase.Act",
@@ -287,6 +292,8 @@ def make1csv(inferred_dnds_dir, sim_data_dir, output_csv_filename):
                 window_traits = os.path.basename(dirpath)
 
                 LOGGER.debug("sim_popn_name=" + sim_popn_name)
+                if sim_popn_name != "small.cov2.indiv1000.codon1600":
+                    continue
 
 
 
@@ -379,6 +386,7 @@ def make1csv(inferred_dnds_dir, sim_data_dir, output_csv_filename):
                         outrow["File"] = inferred_collate_dnds_csv
                         outrow["Reads.Act"] = row["Reads"]
                         outrow["UnambigCodons.Act"] = row["CodonDepth"]
+                        outrow["AADepth.Act"]  = row["AADepth"]
                         outrow["PopSize.Act"] = total_indiv
                         outrow["ConserveTrueBase.Act"] = row["ConserveTrueBase"]
                         outrow["EntropyTrueBase.Act"] = row["EntropyTrueBase"]
@@ -439,9 +447,11 @@ def recollect_dnds_all(all_inferred_dnds_dir, sim_data_dir):
 
     for dirpath, dirnames, filenames in  os.walk(all_inferred_dnds_dir):
         #for filename in fnmatch.filter(filenames, "collate_dnds.csv"):
-        for filename in fnmatch.filter(filenames, "actual_dnds_by_site.csv"):
+        for filename in fnmatch.filter(filenames, "acairo_psctual_dnds_by_site.csv"):
             #/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/small.cov5.indiv1000.codon500.window350.breadth0.6.depth100.0/consensus/window350/collate_dnds.csv
             sim_name = os.path.basename(os.path.abspath(dirpath + os.sep + os.pardir + os.sep + os.pardir))
+            if sim_name != "small.cov2.indiv1000.codon1600":
+                continue
 
             LOGGER.debug("Recollecting sim_name=" + sim_name)
             inferred_collate_dnds_csv = dirpath + os.sep + "collate_dnds.csv"
@@ -465,7 +475,7 @@ if __name__ == "__main__":
     SIM_OUT_DIR = "/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out"
     SIM_DATA_DIR = "/home/thuy/gitrepo/Umberjack_Benchmark/simulations/data"
     OUTPUT_INF_EXP_COLLATE_CSV = SIM_OUT_DIR + os.sep + "collate_all.csv"
-    #recollect_dnds_all(all_inferred_dnds_dir=SIM_OUT_DIR, sim_data_dir=SIM_DATA_DIR)
+    recollect_dnds_all(all_inferred_dnds_dir=SIM_OUT_DIR, sim_data_dir=SIM_DATA_DIR)
     make1csv(inferred_dnds_dir=SIM_OUT_DIR, sim_data_dir=SIM_DATA_DIR, output_csv_filename=OUTPUT_INF_EXP_COLLATE_CSV)
 
     # LOGGER.debug("About to generate rhtml")

@@ -281,10 +281,8 @@ if __name__ == "__main__":
     TEST_PREFIX_FORMAT = "small.cov{}.indiv{}.codon{}"
     for cov in [1, 2, 4]:
         for indiv in [1000]:
-            for codonsites in [400, 1600]:
-
-                if codonsites == 1600 and cov !=2:
-                    continue
+            #for codonsites in [400, 1600]:
+            for codonsites in [400]:
 
                 TEST_PREFIX = TEST_PREFIX_FORMAT.format(cov, indiv, codonsites)
                 config_file = SIM_DATA_DIR + os.sep + TEST_PREFIX + os.sep + TEST_PREFIX + ".config"
@@ -312,13 +310,10 @@ if __name__ == "__main__":
 
                 #for window_size in [300]:
                 for window_size in [200, 300, 350]:
-                    for breadth in [0.75, 0.875, 0.9]:
-                    #for breadth in [0.875]:
+                    for breadth in [0.7, 0.8, 0.9]:
+                    #for breadth in [0.9]:
                         for depth in [0.01*indiv, 0.05*indiv, 0.1*indiv]:
-
-                            if codonsites == 1600 and window_size != 300 and breadth != 0.9 and depth != 10:
-                                continue
-
+                        #for depth in [0.01*indiv]:
 
                             OUT_DIR =   SIM_OUT_DIR + os.sep + TEST_PREFIX + os.sep + REF + os.sep + "window{}.breadth{}.depth{}".format(window_size, breadth, depth)
                             ACTUAL_DNDS_FILENAME = OUT_DIR + os.sep + 'actual_dnds_by_site.csv'
@@ -352,18 +347,18 @@ if __name__ == "__main__":
 
 
                             # errfree reads
-                            do_sliding_window(outdir=ERR_FREE_OUT_DIR, output_csv=ERR_FREE_ACTUAL_DNDS_CSV,
-                                              samfilename=ERR_FREE_ALN_CONSENSUS_SAM_FILENAME, ref_fasta=REFERENCE_FASTA,
-                                              expected_dnds_filename=EXPECTED_DNDS_FILENAME,
-                                              indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
-                                              window_size=window_size, window_depth_cutoff=depth, window_breadth_cutoff=breadth)
-                            do_collate(outdir=ERR_FREE_OUT_DIR, output_csv=COLLATE_ACT_ERRFREE_DNDS_FILENAME,
-                                       ref_fasta=REFERENCE_FASTA,
-                                       full_popn_fasta=FULL_POPN_FASTA,
-                                       expected_dnds_filename=EXPECTED_DNDS_FILENAME,
-                                       indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
-                                       full_popn_conserve_csv=FULL_POPN_CONSERVE_CSV,
-                                       orig_conserve_csv=ERR_FREE_ORIG_CONSERVE_CSV, aln_conserve_csv=ERR_FREE_ALN_CONSERVE_CSV)
+                            # do_sliding_window(outdir=ERR_FREE_OUT_DIR, output_csv=ERR_FREE_ACTUAL_DNDS_CSV,
+                            #                   samfilename=ERR_FREE_ALN_CONSENSUS_SAM_FILENAME, ref_fasta=REFERENCE_FASTA,
+                            #                   expected_dnds_filename=EXPECTED_DNDS_FILENAME,
+                            #                   indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
+                            #                   window_size=window_size, window_depth_cutoff=depth, window_breadth_cutoff=breadth)
+                            # do_collate(outdir=ERR_FREE_OUT_DIR, output_csv=COLLATE_ACT_ERRFREE_DNDS_FILENAME,
+                            #            ref_fasta=REFERENCE_FASTA,
+                            #            full_popn_fasta=FULL_POPN_FASTA,
+                            #            expected_dnds_filename=EXPECTED_DNDS_FILENAME,
+                            #            indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
+                            #            full_popn_conserve_csv=FULL_POPN_CONSERVE_CSV,
+                            #            orig_conserve_csv=ERR_FREE_ORIG_CONSERVE_CSV, aln_conserve_csv=ERR_FREE_ALN_CONSERVE_CSV)
 
                             # # What happens when we downsample the error free windows with the same sequences as the typical windows?
                             # DOWNSAMPLE_ERRFREE_OUTDIR = (os.path.dirname(os.path.realpath(__file__)) + os.sep +"simulations/out/" + TEST_PREFIX +
