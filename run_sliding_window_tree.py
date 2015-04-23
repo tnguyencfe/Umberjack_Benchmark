@@ -258,12 +258,19 @@ def gen_sim_data(config_file, indiv, codonsites, cov):
             fh_out.write("NUM_CODON_SITES={}\n".format(codonsites))
             fh_out.write("INDELIBLE_BIN_DIR=../../bin/indelible/indelible_1.03/linux_x64\n")
             fh_out.write("INDELIBLE_SCALING_RATES={}\n".format("5,10,20,50"))
-            fh_out.write("ART_BIN_DIR = ../../bin/art/art_3.11.14/linux_x64\n")
-            fh_out.write("ART_QUAL_PROFILE_TSV1 = ../../bin/art/art_3.11.14/Illumina_profiles/EmpMiSeq250R1.txt\n")
-            fh_out.write("ART_QUAL_PROFILE_TSV2 = ../../bin/art/art_3.11.14/Illumina_profiles/EmpMiSeq250R2.txt\n")
+            fh_out.write("ART_BIN_DIR = ../../bin/art/art_3.09.15/linux_x64\n")
+            fh_out.write("ART_QUAL_PROFILE_TSV1 = ../../bin/art/art_3.09.15/Illumina_profiles/EmpMiSeq250R1.txt\n")
+            fh_out.write("ART_QUAL_PROFILE_TSV2 = ../../bin/art/art_3.09.15/Illumina_profiles/EmpMiSeq250R2.txt\n")
             fh_out.write("ART_FOLD_COVER={}\n".format(cov))
-            fh_out.write("ART_MEAN_INSERT = 346\n")
-            fh_out.write("ART_STDEV_INSERT = 75\n")
+            fh_out.write("ART_MEAN_FRAG = 346\n")
+            fh_out.write("ART_STDEV_FRAG = 75\n")
+            fh_out.write("ART_READ_LENGTH = 250\n")
+            fh_out.write("ART_INSERT_RATE1 = 0.00045\n")
+            fh_out.write("ART_INSERT_RATE2 = 0.00045\n")
+            fh_out.write("ART_DEL_RATE1 = 0.00045\n")
+            fh_out.write("ART_DEL_RATE2 = 0.00045\n")
+            fh_out.write("ART_QUAL_SHIFT1 = 2\n")
+            fh_out.write("ART_QUAL_SHIFT2 = 2\n")
             fh_out.write("PICARD_BIN_DIR = ../../bin/picard/picard_1.129\n")
             fh_out.write("BWA_BIN_DIR = ../../bin/bwa/bwa_0.7.12/linux_x64\n")
             fh_out.write("PROCS = {}\n".format(PROCS))
@@ -281,8 +288,8 @@ if __name__ == "__main__":
     TEST_PREFIX_FORMAT = "small.cov{}.indiv{}.codon{}"
     for cov in [1, 2, 4]:
         for indiv in [1000]:
-            #for codonsites in [400, 1600]:
             for codonsites in [400]:
+
 
                 TEST_PREFIX = TEST_PREFIX_FORMAT.format(cov, indiv, codonsites)
                 config_file = SIM_DATA_DIR + os.sep + TEST_PREFIX + os.sep + TEST_PREFIX + ".config"
@@ -346,19 +353,19 @@ if __name__ == "__main__":
                                        orig_conserve_csv=ORIG_CONSERVE_CSV, aln_conserve_csv=ALN_CONSERVE_CSV)
 
 
-                            # errfree reads
-                            # do_sliding_window(outdir=ERR_FREE_OUT_DIR, output_csv=ERR_FREE_ACTUAL_DNDS_CSV,
-                            #                   samfilename=ERR_FREE_ALN_CONSENSUS_SAM_FILENAME, ref_fasta=REFERENCE_FASTA,
-                            #                   expected_dnds_filename=EXPECTED_DNDS_FILENAME,
-                            #                   indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
-                            #                   window_size=window_size, window_depth_cutoff=depth, window_breadth_cutoff=breadth)
-                            # do_collate(outdir=ERR_FREE_OUT_DIR, output_csv=COLLATE_ACT_ERRFREE_DNDS_FILENAME,
-                            #            ref_fasta=REFERENCE_FASTA,
-                            #            full_popn_fasta=FULL_POPN_FASTA,
-                            #            expected_dnds_filename=EXPECTED_DNDS_FILENAME,
-                            #            indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
-                            #            full_popn_conserve_csv=FULL_POPN_CONSERVE_CSV,
-                            #            orig_conserve_csv=ERR_FREE_ORIG_CONSERVE_CSV, aln_conserve_csv=ERR_FREE_ALN_CONSERVE_CSV)
+                            #errfree reads
+                            do_sliding_window(outdir=ERR_FREE_OUT_DIR, output_csv=ERR_FREE_ACTUAL_DNDS_CSV,
+                                              samfilename=ERR_FREE_ALN_CONSENSUS_SAM_FILENAME, ref_fasta=REFERENCE_FASTA,
+                                              expected_dnds_filename=EXPECTED_DNDS_FILENAME,
+                                              indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
+                                              window_size=window_size, window_depth_cutoff=depth, window_breadth_cutoff=breadth)
+                            do_collate(outdir=ERR_FREE_OUT_DIR, output_csv=COLLATE_ACT_ERRFREE_DNDS_FILENAME,
+                                       ref_fasta=REFERENCE_FASTA,
+                                       full_popn_fasta=FULL_POPN_FASTA,
+                                       expected_dnds_filename=EXPECTED_DNDS_FILENAME,
+                                       indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
+                                       full_popn_conserve_csv=FULL_POPN_CONSERVE_CSV,
+                                       orig_conserve_csv=ERR_FREE_ORIG_CONSERVE_CSV, aln_conserve_csv=ERR_FREE_ALN_CONSERVE_CSV)
 
                             # # What happens when we downsample the error free windows with the same sequences as the typical windows?
                             # DOWNSAMPLE_ERRFREE_OUTDIR = (os.path.dirname(os.path.realpath(__file__)) + os.sep +"simulations/out/" + TEST_PREFIX +
