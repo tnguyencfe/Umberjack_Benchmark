@@ -85,6 +85,8 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
             # *.{start bp}_{end bp}.fasta filenames use 1-based nucleotide position numbering
             slice_fasta_fileprefix = slice_fasta_filename.split('.fasta')[0]
 
+            tree_len = None
+            tree_depth = None
             tree_filename = slice_fasta_filename.replace(".fasta", ".tree")
             if os.path.exists(tree_filename):
                 # NB:  FastTree tree length in nucleotide substitutions / site.  HyPhy converts trees to codon substitution/site to count codon substitutions along phylogeny

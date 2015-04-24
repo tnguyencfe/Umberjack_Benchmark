@@ -278,8 +278,13 @@ def gen_sim_data(config_file, indiv, codonsites, cov):
             fh_out.write("HYPHY_EXE = ../../bin/hyphy/hyphy_2.2.3/linux_x64/HYPHYMP\n")
             fh_out.write("HYPHY_BASEPATH = ../../bin/hyphy/hyphy_2.2.3/res/TemplateBatchFiles\n")
 
-    sim_pipeline_exe = os.path.dirname(os.path.realpath(__file__)) + "/simulations/sim_pipeline.py"
-    subprocess.check_call(["python", sim_pipeline_exe, config_file])
+    # small.cov5.indiv1000.codon500.window350.breadth0.6.depth100.0/mixed/aln/small.cov5.indiv1000.codon500.window350.breadth0.6.depth100.0.mixed.reads.cov.html
+    cov_html = sim_outdir + os.sep + "mixed" + os.sep + "aln" + os.sep + filename_prefix + ".mixed.reads.cov.html"
+    if os.path.exists(cov_html) and os.path.getsize(cov_html):
+        LOGGER.warn("Not remaking simluated data for " + cov_html)
+    else:
+        sim_pipeline_exe = os.path.dirname(os.path.realpath(__file__)) + "/simulations/sim_pipeline.py"
+        subprocess.check_call(["python", sim_pipeline_exe, config_file])
 
 
 if __name__ == "__main__":
