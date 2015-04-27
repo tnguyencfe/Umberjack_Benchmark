@@ -46,7 +46,7 @@ def do_sliding_window(outdir, output_csv, samfilename, ref_fasta, expected_dnds_
 
     call = ["mpirun",
             "--machinefile", SIM_OUT_DIR + os.sep + "machine_window" + str(window_size) + ".txt",
-            "--output-filename", outdir + os.sep + "logs" + os.path.basename(outdir) + ".log"
+            "--output-filename", outdir + os.sep + "logs" + os.sep + os.path.basename(outdir) + ".log",
             "python",
             os.path.dirname(os.path.realpath(__file__)) + os.sep + "../SlidingWindow/umberjack.py",
             "--out_dir", outdir,
@@ -358,7 +358,7 @@ def process_window_size((test_prefix, indiv, window_size)):
             umberjack_html =   OUT_DIR + os.sep + "umberjack_unit_test.html"
             errfree_umberjack_html =   ERR_FREE_OUT_DIR + os.sep + "umberjack_unit_test.html"
             if os.path.exists(umberjack_html) and os.path.getsize(umberjack_html) and os.path.exists(errfree_umberjack_html) and os.path.getsize(errfree_umberjack_html):
-                LOGGER.warn("Not redoing simulations for " + config_file)
+                LOGGER.warn("Not redoing simulations for " + umberjack_html)
                 return
 
 
