@@ -9,7 +9,7 @@ import re
 import collect_stats
 import logging
 import config.settings as settings
-
+import pool_traceback
 
 settings.setup_logging()
 
@@ -26,7 +26,7 @@ MAX_PROP_N = 1  # maximum proportion of N bases in MSA-aligned sequence
 READ_QUAL_CUTOFF = 20   # Phred quality score cutoff [0,40]
 
 
-
+CONCURRENT_MPIRUN = 3
 THREADS_PER_WINDOW = 4
 WINDOW_PROCS = 3
 START_NUCPOS = 1
@@ -43,23 +43,59 @@ REF = "consensus"
 def do_sliding_window(outdir, output_csv, samfilename, ref_fasta, expected_dnds_filename, indelible_dnds_filename,
                       window_size, window_depth_cutoff, window_breadth_cutoff):
     ref_len = Utility.get_seq2len(ref_fasta)[REF]
-    umberjack.eval_windows_async(ref=REF, sam_filename=samfilename,
-                                                           out_dir=outdir,
-                                                           map_qual_cutoff=MAPQ_CUTOFF,
-                                                           read_qual_cutoff=READ_QUAL_CUTOFF,
-                                                           max_prop_n=MAX_PROP_N,
-                                                           start_nucpos=START_NUCPOS,
-                                                           end_nucpos=ref_len,
-                                                           window_size=window_size,
-                                                           window_depth_cutoff=window_depth_cutoff,
-                                                           window_breadth_cutoff=window_breadth_cutoff,
-                                                           threads_per_window=THREADS_PER_WINDOW,
-                                                           concurrent_windows=WINDOW_PROCS,
-                                                           output_csv_filename=output_csv,
-                                                           window_slide=WINDOW_SLIDE,
-                                                           insert=KEEP_INSERTS,
-                                                           mask_stop_codon=MASK_STOP_CODON,
-                                                           remove_duplicates=REMOVE_DUPLICATES)
+
+    call = ["mpirun",
+            "--machinefile", SIM_OUT_DIR + os.sep + "machine_window" + str(window_size) + ".txt",
+            "--output-filename", outdir + os.sep + "logs" + os.path.basename(outdir) + ".log"
+            "python",
+            os.path.abspath("../../SlidingWindow/umberjack.py"),
+            "--out_dir", outdir,
+            "--map_qual_cutoff", str(MAPQ_CUTOFF),
+            "--read_qual_cutoff", str(READ_QUAL_CUTOFF),
+            "--max_prop_n", str(MAX_PROP_N),
+            "--window_size", str(window_size),
+            "--window_slide", str(WINDOW_SLIDE),
+            "--window_breadth_cutoff", str(window_breadth_cutoff),
+            "--window_depth_cutoff", str(window_depth_cutoff),
+            "--start_nucpos", str(START_NUCPOS),
+            "--threads_per_window", str(THREADS_PER_WINDOW),
+            "--mpi",
+            "--mode", "DNDS",
+            "--output_csv_filename", output_csv,
+            "--sam_filename", samfilename,
+            "--ref", REF
+    ]
+    if MASK_STOP_CODON:
+        call = call + ["--mask_stop_codon"]
+    if REMOVE_DUPLICATES:
+        call = call + ["--remove_duplicates"]
+    if KEEP_INSERTS:
+        call = call + ["--insert"]
+
+    LOGGER.debug("About to execute cmd:" + " ".join(call))
+    try:
+        subprocess.check_call(call, shell=False, env=os.environ)
+    except Exception, e:
+        LOGGER.error("Failure in " + " ".join(call) + "\n" + e.message)
+        LOGGER.exception(e.message)
+
+    # umberjack.eval_windows_async(ref=REF, sam_filename=samfilename,
+    #                                                        out_dir=outdir,
+    #                                                        map_qual_cutoff=MAPQ_CUTOFF,
+    #                                                        read_qual_cutoff=READ_QUAL_CUTOFF,
+    #                                                        max_prop_n=MAX_PROP_N,
+    #                                                        start_nucpos=START_NUCPOS,
+    #                                                        end_nucpos=ref_len,
+    #                                                        window_size=window_size,
+    #                                                        window_depth_cutoff=window_depth_cutoff,
+    #                                                        window_breadth_cutoff=window_breadth_cutoff,
+    #                                                        threads_per_window=THREADS_PER_WINDOW,
+    #                                                        concurrent_windows=WINDOW_PROCS,
+    #                                                        output_csv_filename=output_csv,
+    #                                                        window_slide=WINDOW_SLIDE,
+    #                                                        insert=KEEP_INSERTS,
+    #                                                        mask_stop_codon=MASK_STOP_CODON,
+    #                                                        remove_duplicates=REMOVE_DUPLICATES)
 
     rconfig_file = os.path.dirname(os.path.realpath(__file__)) + os.sep +"simulations" + os.sep + "R" + os.sep + "umberjack_unit_test.config"
     with open(rconfig_file, 'w') as fh_out_config:
@@ -287,153 +323,96 @@ def gen_sim_data(config_file, indiv, codonsites, cov):
         subprocess.check_call(["python", sim_pipeline_exe, config_file])
 
 
+def process_window_size((test_prefix, indiv, window_size)):
+    """
+    Umberjack output for the given configurations.
+    :return:
+    """
+     # Run sliding windows and collect stats
+    FULL_POPN_FASTA =  SIM_DATA_DIR + os.sep + test_prefix + "/mixed/" + test_prefix + ".mixed.fasta"
+    REFERENCE_FASTA =  SIM_DATA_DIR + os.sep + test_prefix + "/mixed/" + test_prefix + ".mixed.consensus.fasta"
+
+    FULL_POPN_CONSERVE_CSV = REFERENCE_FASTA.replace(".consensus.fasta", ".conserve.csv")
+    INDELIBLE_DNDS_FILENAME = SIM_DATA_DIR + "/" + test_prefix + "/mixed/" + test_prefix + ".mixed.rates.csv"
+    EXPECTED_DNDS_FILENAME = REFERENCE_FASTA.replace("consensus.fasta", "dnds.tsv")
+
+    SAM_FILENAME = SIM_DATA_DIR + os.sep + test_prefix + "/mixed/aln/" + test_prefix + ".mixed.reads.consensus.bwa.sort.query.sam"
+    ORIG_CONSERVE_CSV = SIM_DATA_DIR + os.sep + test_prefix + "/mixed/reads/" + test_prefix + ".mixed.reads.conserve.csv"
+    ALN_CONSERVE_CSV = SIM_DATA_DIR + os.sep + test_prefix + "/mixed/aln/" + test_prefix + ".mixed.reads.consensus.bwa.conserve.csv"
+
+    ERR_FREE_ALN_CONSENSUS_SAM_FILENAME = SAM_FILENAME.replace(".reads.", ".reads.errFree.")
+    ERR_FREE_ORIG_CONSERVE_CSV = ORIG_CONSERVE_CSV.replace(".reads", ".reads.errFree")
+    ERR_FREE_ALN_CONSERVE_CSV = ALN_CONSERVE_CSV.replace(".reads", ".reads.errFree")
+
+    for breadth in [0.7, 0.8, 0.9]:
+        for depth in [0.01*indiv, 0.05*indiv, 0.1*indiv]:
+            OUT_DIR =   SIM_OUT_DIR + os.sep + test_prefix + os.sep + REF + os.sep + "window{}.breadth{}.depth{}".format(window_size, breadth, depth)
+            ACTUAL_DNDS_FILENAME = OUT_DIR + os.sep + 'actual_dnds_by_site.csv'
+            COLLATE_ACT_DNDS_FILENAME = OUT_DIR + os.sep + "collate_dnds.csv"
+
+
+            ERR_FREE_OUT_DIR =   SIM_OUT_DIR + os.sep + test_prefix + os.sep + REF + os.sep + "window{}.breadth{}.depth{}.errFree".format(window_size, breadth, depth)
+            ERR_FREE_ACTUAL_DNDS_CSV = ERR_FREE_OUT_DIR + os.sep + 'actual_dnds_by_site.csv'
+            COLLATE_ACT_ERRFREE_DNDS_FILENAME = ERR_FREE_OUT_DIR + os.sep + "collate_dnds.csv"
+
+            umberjack_html =   OUT_DIR + os.sep + "umberjack_unit_test.html"
+            errfree_umberjack_html =   ERR_FREE_OUT_DIR + os.sep + "umberjack_unit_test.html"
+            if os.path.exists(umberjack_html) and os.path.getsize(umberjack_html) and os.path.exists(errfree_umberjack_html) and os.path.getsize(errfree_umberjack_html):
+                LOGGER.warn("Not redoing simulations for " + config_file)
+                return
+
+
+            # # typical reads
+            do_sliding_window(outdir=OUT_DIR, output_csv=ACTUAL_DNDS_FILENAME,
+                              samfilename=SAM_FILENAME, ref_fasta=REFERENCE_FASTA,
+                              expected_dnds_filename=EXPECTED_DNDS_FILENAME,
+                              indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
+                              window_size=window_size, window_depth_cutoff=depth, window_breadth_cutoff=breadth)
+            do_collate(outdir=OUT_DIR, output_csv=COLLATE_ACT_DNDS_FILENAME,
+                       ref_fasta=REFERENCE_FASTA,
+                       full_popn_fasta=FULL_POPN_FASTA,
+                       expected_dnds_filename=EXPECTED_DNDS_FILENAME,
+                       indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
+                       full_popn_conserve_csv=FULL_POPN_CONSERVE_CSV,
+                       orig_conserve_csv=ORIG_CONSERVE_CSV, aln_conserve_csv=ALN_CONSERVE_CSV)
+
+
+            #errfree reads
+            do_sliding_window(outdir=ERR_FREE_OUT_DIR, output_csv=ERR_FREE_ACTUAL_DNDS_CSV,
+                              samfilename=ERR_FREE_ALN_CONSENSUS_SAM_FILENAME, ref_fasta=REFERENCE_FASTA,
+                              expected_dnds_filename=EXPECTED_DNDS_FILENAME,
+                              indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
+                              window_size=window_size, window_depth_cutoff=depth, window_breadth_cutoff=breadth)
+            do_collate(outdir=ERR_FREE_OUT_DIR, output_csv=COLLATE_ACT_ERRFREE_DNDS_FILENAME,
+                       ref_fasta=REFERENCE_FASTA,
+                       full_popn_fasta=FULL_POPN_FASTA,
+                       expected_dnds_filename=EXPECTED_DNDS_FILENAME,
+                       indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
+                       full_popn_conserve_csv=FULL_POPN_CONSERVE_CSV,
+                       orig_conserve_csv=ERR_FREE_ORIG_CONSERVE_CSV, aln_conserve_csv=ERR_FREE_ALN_CONSERVE_CSV)
+
+            LOGGER.debug("Done umberjack and collectdnds for " + OUT_DIR)
+
+
+
 if __name__ == "__main__":
 
-
+    pool = pool_traceback.LoggingPool(CONCURRENT_MPIRUN)
     TEST_PREFIX_FORMAT = "small.cov{}.indiv{}.codon{}"
     for cov in [5]:
         for indiv in [1000]:
             for codonsites in [500]:
 
-
-                TEST_PREFIX = TEST_PREFIX_FORMAT.format(cov, indiv, codonsites)
-                config_file = SIM_DATA_DIR + os.sep + TEST_PREFIX + os.sep + TEST_PREFIX + ".config"
+                test_prefix = TEST_PREFIX_FORMAT.format(cov, indiv, codonsites)
+                config_file = SIM_DATA_DIR + os.sep + test_prefix + os.sep + test_prefix + ".config"
                 LOGGER.debug("Handling simulated config " + config_file)
 
                 gen_sim_data(config_file, indiv, codonsites, cov)
 
-                # Run sliding windows and collect stats
-                FULL_POPN_FASTA =  SIM_DATA_DIR + os.sep + TEST_PREFIX + "/mixed/" + TEST_PREFIX + ".mixed.fasta"
-                REFERENCE_FASTA =  SIM_DATA_DIR + os.sep + TEST_PREFIX + "/mixed/" + TEST_PREFIX + ".mixed.consensus.fasta"
-                REF = "consensus"
-                REF_LEN = Utility.get_longest_seq_size_from_fasta(REFERENCE_FASTA)
 
-                FULL_POPN_CONSERVE_CSV = REFERENCE_FASTA.replace(".consensus.fasta", ".conserve.csv")
-                INDELIBLE_DNDS_FILENAME = SIM_DATA_DIR + "/" + TEST_PREFIX + "/mixed/" + TEST_PREFIX + ".mixed.rates.csv"
-                EXPECTED_DNDS_FILENAME = REFERENCE_FASTA.replace("consensus.fasta", "dnds.tsv")
+                for result in pool.imap_unordered(process_window_size, [(test_prefix, indiv, 200),
+                                                                        (test_prefix, indiv, 300),
+                                                                        (test_prefix, indiv, 350)]):
+                    pass
 
-                SAM_FILENAME = SIM_DATA_DIR + os.sep + TEST_PREFIX + "/mixed/aln/" + TEST_PREFIX + ".mixed.reads.consensus.bwa.sort.query.sam"
-                ORIG_CONSERVE_CSV = SIM_DATA_DIR + os.sep + TEST_PREFIX + "/mixed/reads/" + TEST_PREFIX + ".mixed.reads.conserve.csv"
-                ALN_CONSERVE_CSV = SIM_DATA_DIR + os.sep + TEST_PREFIX + "/mixed/aln/" + TEST_PREFIX + ".mixed.reads.consensus.bwa.conserve.csv"
-
-                ERR_FREE_ALN_CONSENSUS_SAM_FILENAME = SAM_FILENAME.replace(".reads.", ".reads.errFree.")
-                ERR_FREE_ORIG_CONSERVE_CSV = ORIG_CONSERVE_CSV.replace(".reads", ".reads.errFree")
-                ERR_FREE_ALN_CONSERVE_CSV = ALN_CONSERVE_CSV.replace(".reads", ".reads.errFree")
-
-                #for window_size in [300]:
-                for window_size in [200, 300, 350]:
-                    for breadth in [0.7, 0.8, 0.9]:
-                    #for breadth in [0.9]:
-                        for depth in [0.01*indiv, 0.05*indiv, 0.1*indiv]:
-                        #for depth in [0.01*indiv]:
-
-                            OUT_DIR =   SIM_OUT_DIR + os.sep + TEST_PREFIX + os.sep + REF + os.sep + "window{}.breadth{}.depth{}".format(window_size, breadth, depth)
-                            ACTUAL_DNDS_FILENAME = OUT_DIR + os.sep + 'actual_dnds_by_site.csv'
-                            COLLATE_ACT_DNDS_FILENAME = OUT_DIR + os.sep + "collate_dnds.csv"
-
-
-                            ERR_FREE_OUT_DIR =   SIM_OUT_DIR + os.sep + TEST_PREFIX + os.sep + REF + os.sep + "window{}.breadth{}.depth{}.errFree".format(window_size, breadth, depth)
-                            ERR_FREE_ACTUAL_DNDS_CSV = ERR_FREE_OUT_DIR + os.sep + 'actual_dnds_by_site.csv'
-                            COLLATE_ACT_ERRFREE_DNDS_FILENAME = ERR_FREE_OUT_DIR + os.sep + "collate_dnds.csv"
-
-                            umberjack_html =   OUT_DIR + os.sep + "umberjack_unit_test.html"
-                            errfree_umberjack_html =   ERR_FREE_OUT_DIR + os.sep + "umberjack_unit_test.html"
-                            if os.path.exists(umberjack_html) and os.path.getsize(umberjack_html) and os.path.exists(errfree_umberjack_html) and os.path.getsize(errfree_umberjack_html):
-                                LOGGER.warn("Not redoing simulations for " + config_file)
-                                continue
-
-
-                            # # typical reads
-                            do_sliding_window(outdir=OUT_DIR, output_csv=ACTUAL_DNDS_FILENAME,
-                                              samfilename=SAM_FILENAME, ref_fasta=REFERENCE_FASTA,
-                                              expected_dnds_filename=EXPECTED_DNDS_FILENAME,
-                                              indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
-                                              window_size=window_size, window_depth_cutoff=depth, window_breadth_cutoff=breadth)
-                            do_collate(outdir=OUT_DIR, output_csv=COLLATE_ACT_DNDS_FILENAME,
-                                       ref_fasta=REFERENCE_FASTA,
-                                       full_popn_fasta=FULL_POPN_FASTA,
-                                       expected_dnds_filename=EXPECTED_DNDS_FILENAME,
-                                       indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
-                                       full_popn_conserve_csv=FULL_POPN_CONSERVE_CSV,
-                                       orig_conserve_csv=ORIG_CONSERVE_CSV, aln_conserve_csv=ALN_CONSERVE_CSV)
-
-
-                            #errfree reads
-                            do_sliding_window(outdir=ERR_FREE_OUT_DIR, output_csv=ERR_FREE_ACTUAL_DNDS_CSV,
-                                              samfilename=ERR_FREE_ALN_CONSENSUS_SAM_FILENAME, ref_fasta=REFERENCE_FASTA,
-                                              expected_dnds_filename=EXPECTED_DNDS_FILENAME,
-                                              indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
-                                              window_size=window_size, window_depth_cutoff=depth, window_breadth_cutoff=breadth)
-                            do_collate(outdir=ERR_FREE_OUT_DIR, output_csv=COLLATE_ACT_ERRFREE_DNDS_FILENAME,
-                                       ref_fasta=REFERENCE_FASTA,
-                                       full_popn_fasta=FULL_POPN_FASTA,
-                                       expected_dnds_filename=EXPECTED_DNDS_FILENAME,
-                                       indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
-                                       full_popn_conserve_csv=FULL_POPN_CONSERVE_CSV,
-                                       orig_conserve_csv=ERR_FREE_ORIG_CONSERVE_CSV, aln_conserve_csv=ERR_FREE_ALN_CONSERVE_CSV)
-
-                            # # What happens when we downsample the error free windows with the same sequences as the typical windows?
-                            # DOWNSAMPLE_ERRFREE_OUTDIR = (os.path.dirname(os.path.realpath(__file__)) + os.sep +"simulations/out/" + TEST_PREFIX +
-                            #                         "/consensus/window" + str(WINDOW_SIZE) + ".errFree.downsample")
-                            # DOWNSAMPLE_ERRFREE_ACTUAL_DNDS_CSV = DOWNSAMPLE_ERRFREE_OUTDIR + os.sep + 'actual_dnds_by_site.csv'
-                            # DOWNSAMPLE_ERRFREE_COLLATE_OUTPUT_CSV = DOWNSAMPLE_ERRFREE_OUTDIR + os.sep + 'collate_dnds.csv'
-                            #
-                            # downsample_errfree_window_by_typical(typical_outdir=OUT_DIR, errfree_outdir=ERR_FREE_OUT_DIR,
-                            #                                      downsample_errfree_outdir=DOWNSAMPLE_ERRFREE_OUTDIR)
-                            #
-                            # do_sliding_window(outdir=DOWNSAMPLE_ERRFREE_OUTDIR, output_csv=DOWNSAMPLE_ERRFREE_ACTUAL_DNDS_CSV,
-                            #                       samfilename=ERR_FREE_ALN_CONSENSUS_SAM_FILENAME, ref_fasta=REFERENCE_FASTA,
-                            #                       expected_dnds_filename=EXPECTED_DNDS_FILENAME,
-                            #                       indelible_dnds_filename=INDELIBLE_DNDS_FILENAME)
-                            # do_collate(outdir=DOWNSAMPLE_ERRFREE_OUTDIR, output_csv=DOWNSAMPLE_ERRFREE_COLLATE_OUTPUT_CSV,
-                            #                ref_fasta=REFERENCE_FASTA,
-                            #                full_popn_fasta=FULL_POPN_FASTA,
-                            #                expected_dnds_filename=EXPECTED_DNDS_FILENAME,
-                            #                indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
-                            #                full_popn_conserve_csv=FULL_POPN_CONSERVE_CSV,
-                            #                orig_conserve_csv=ERR_FREE_ORIG_CONSERVE_CSV, aln_conserve_csv=ERR_FREE_ALN_CONSERVE_CSV)
-                            #
-                            #
-                            # # What happens when we downsample the error free windows with the same sequences at the typical windows
-                            # #   AND N-mask the same bases as the typical windows?
-                            # DOWNSAMPLE_NMASK_ERRFREE_OUTDIR = (os.path.dirname(os.path.realpath(__file__)) + os.sep +"simulations/out/" + TEST_PREFIX +
-                            #                         "/consensus/window" + str(WINDOW_SIZE) + ".errFree.downsample.Nmask")
-                            # DOWNSAMPLE_NMASK_ERRFREE_ACTUAL_DNDS_CSV = DOWNSAMPLE_NMASK_ERRFREE_OUTDIR + os.sep + 'actual_dnds_by_site.csv'
-                            # DOWNSAMPLE_NMASK_ERRFREE_COLLATE_OUTPUT_CSV = DOWNSAMPLE_NMASK_ERRFREE_OUTDIR + os.sep + 'collate_dnds.csv'
-                            #
-                            # downsample_Nmask_errfree_window_by_typical(typical_outdir=OUT_DIR, errfree_outdir=ERR_FREE_OUT_DIR,
-                            #                                      downsample_errfree_outdir=DOWNSAMPLE_NMASK_ERRFREE_OUTDIR)
-                            # do_sliding_window(outdir=DOWNSAMPLE_NMASK_ERRFREE_OUTDIR, output_csv=DOWNSAMPLE_NMASK_ERRFREE_ACTUAL_DNDS_CSV,
-                            #                       samfilename=ERR_FREE_ALN_CONSENSUS_SAM_FILENAME, ref_fasta=REFERENCE_FASTA,
-                            #                       expected_dnds_filename=EXPECTED_DNDS_FILENAME,
-                            #                       indelible_dnds_filename=INDELIBLE_DNDS_FILENAME)
-                            # do_collate(outdir=DOWNSAMPLE_NMASK_ERRFREE_OUTDIR, output_csv=DOWNSAMPLE_NMASK_ERRFREE_COLLATE_OUTPUT_CSV,
-                            #                ref_fasta=REFERENCE_FASTA,
-                            #                full_popn_fasta=FULL_POPN_FASTA,
-                            #                expected_dnds_filename=EXPECTED_DNDS_FILENAME,
-                            #                indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
-                            #                full_popn_conserve_csv=FULL_POPN_CONSERVE_CSV,
-                            #                orig_conserve_csv=ERR_FREE_ORIG_CONSERVE_CSV, aln_conserve_csv=ERR_FREE_ALN_CONSERVE_CSV)
-
-                            # # What happens when we downsample the error free windows with the same sequences at the typical windows
-                            # #   AND N-mask the same bases as the typical windows
-                            # #   AND left/right pad the same bases as the typical windows?
-                            # DOWNSAMPLE_NMASK_PAD_ERRFREE_OUTDIR = (os.path.dirname(os.path.realpath(__file__)) + os.sep +"simulations/out/" + TEST_PREFIX +
-                            #                         "/consensus/window" + str(window_size) + ".errFree.downsample.Nmask.pad")
-                            # DOWNSAMPLE_NMASK_PAD_ERRFREE_ACTUAL_DNDS_CSV = DOWNSAMPLE_NMASK_PAD_ERRFREE_OUTDIR + os.sep + 'actual_dnds_by_site.csv'
-                            # DOWNSAMPLE_NMASK_PAD_ERRFREE_COLLATE_OUTPUT_CSV = DOWNSAMPLE_NMASK_PAD_ERRFREE_OUTDIR + os.sep + 'collate_dnds.csv'
-                            #
-                            # downsample_Nmask_pad_errfree_window_by_typical(typical_outdir=OUT_DIR, errfree_outdir=ERR_FREE_OUT_DIR,
-                            #                                      downsample_errfree_outdir=DOWNSAMPLE_NMASK_PAD_ERRFREE_OUTDIR)
-                            # do_sliding_window(outdir=DOWNSAMPLE_NMASK_PAD_ERRFREE_OUTDIR, output_csv=DOWNSAMPLE_NMASK_PAD_ERRFREE_ACTUAL_DNDS_CSV,
-                            #                       samfilename=ERR_FREE_ALN_CONSENSUS_SAM_FILENAME, ref_fasta=REFERENCE_FASTA,
-                            #                       expected_dnds_filename=EXPECTED_DNDS_FILENAME,
-                            #                       indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
-                            #                       window_size=window_size, window_depth_cutoff=depth, window_breadth_cutoff=breadth)
-                            # do_collate(outdir=DOWNSAMPLE_NMASK_PAD_ERRFREE_OUTDIR, output_csv=DOWNSAMPLE_NMASK_PAD_ERRFREE_COLLATE_OUTPUT_CSV,
-                            #                ref_fasta=REFERENCE_FASTA,
-                            #                full_popn_fasta=FULL_POPN_FASTA,
-                            #                expected_dnds_filename=EXPECTED_DNDS_FILENAME,
-                            #                indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
-                            #                full_popn_conserve_csv=FULL_POPN_CONSERVE_CSV,
-                            #                orig_conserve_csv=ERR_FREE_ORIG_CONSERVE_CSV, aln_conserve_csv=ERR_FREE_ALN_CONSERVE_CSV)
+    pool.close()
