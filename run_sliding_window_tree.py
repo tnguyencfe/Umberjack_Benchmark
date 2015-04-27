@@ -48,7 +48,7 @@ def do_sliding_window(outdir, output_csv, samfilename, ref_fasta, expected_dnds_
             "--machinefile", SIM_OUT_DIR + os.sep + "machine_window" + str(window_size) + ".txt",
             "--output-filename", outdir + os.sep + "logs" + os.path.basename(outdir) + ".log"
             "python",
-            os.path.dirname(os.path.realpath(__file__)) + os.sep + "/../SlidingWindow/umberjack.py",
+            os.path.dirname(os.path.realpath(__file__)) + os.sep + "../SlidingWindow/umberjack.py",
             "--out_dir", outdir,
             "--map_qual_cutoff", str(MAPQ_CUTOFF),
             "--read_qual_cutoff", str(READ_QUAL_CUTOFF),
