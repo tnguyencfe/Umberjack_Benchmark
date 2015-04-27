@@ -367,7 +367,7 @@ def process_window_size((test_prefix, indiv, window_size)):
                               samfilename=SAM_FILENAME, ref_fasta=REFERENCE_FASTA,
                               expected_dnds_filename=EXPECTED_DNDS_FILENAME,
                               indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
-                              window_size=window_size, window_depth_cutoff=depth, window_breadth_cutoff=breadth)
+                              window_size=window_size, window_depth_cutoff=int(depth), window_breadth_cutoff=breadth)
             do_collate(outdir=OUT_DIR, output_csv=COLLATE_ACT_DNDS_FILENAME,
                        ref_fasta=REFERENCE_FASTA,
                        full_popn_fasta=FULL_POPN_FASTA,
@@ -382,7 +382,7 @@ def process_window_size((test_prefix, indiv, window_size)):
                               samfilename=ERR_FREE_ALN_CONSENSUS_SAM_FILENAME, ref_fasta=REFERENCE_FASTA,
                               expected_dnds_filename=EXPECTED_DNDS_FILENAME,
                               indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
-                              window_size=window_size, window_depth_cutoff=depth, window_breadth_cutoff=breadth)
+                              window_size=window_size, window_depth_cutoff=int(depth), window_breadth_cutoff=breadth)
             do_collate(outdir=ERR_FREE_OUT_DIR, output_csv=COLLATE_ACT_ERRFREE_DNDS_FILENAME,
                        ref_fasta=REFERENCE_FASTA,
                        full_popn_fasta=FULL_POPN_FASTA,
