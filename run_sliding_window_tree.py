@@ -291,9 +291,9 @@ if __name__ == "__main__":
 
 
     TEST_PREFIX_FORMAT = "small.cov{}.indiv{}.codon{}"
-    for cov in [1, 2, 4]:
+    for cov in [5]:
         for indiv in [1000]:
-            for codonsites in [400]:
+            for codonsites in [500]:
 
 
                 TEST_PREFIX = TEST_PREFIX_FORMAT.format(cov, indiv, codonsites)
