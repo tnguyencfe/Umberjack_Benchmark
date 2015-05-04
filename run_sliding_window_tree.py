@@ -278,7 +278,16 @@ def downsample_Nmask_pad_errfree_window_by_typical(typical_outdir, errfree_outdi
                 fh_out.write(str(errfree_recdict[typical_rec.id].seq) + "\n")
 
 
-def gen_sim_data(config_file, indiv, codonsites, cov):
+def gen_sim_data(config_file, indiv, codonsites, cov, scales):
+    """
+
+    :param str config_file: config file to output to
+    :param int indiv:  total individals in population
+    :param int codonsites: number of codon sites.  This must be perfectly divisible by the number of scales
+    :param int cov:  fold read coverage
+    :param [int] scales:  number of different mtuations scalings.  a different population will be generated at each mutation scaling and
+    then sites from the different populations will be combined in randomized manner into single population.  But each scaling will be represented equally in the combo population.
+    """
     sim_outdir = os.path.dirname(config_file)
     filename_prefix = os.path.basename(config_file).split(".config")[0]
     if not os.path.exists(sim_outdir):
@@ -293,7 +302,7 @@ def gen_sim_data(config_file, indiv, codonsites, cov):
             fh_out.write("SEED=9828384\n")
             fh_out.write("NUM_CODON_SITES={}\n".format(codonsites))
             fh_out.write("INDELIBLE_BIN_DIR=../../bin/indelible/indelible_1.03/linux_x64\n")
-            fh_out.write("INDELIBLE_SCALING_RATES={}\n".format("5,10,20,50"))
+            fh_out.write("INDELIBLE_SCALING_RATES={}\n".format(",".join([str(x) for x in scales])))
             fh_out.write("ART_BIN_DIR = ../../bin/art/art_3.09.15/linux_x64\n")
             fh_out.write("ART_QUAL_PROFILE_TSV1 = ../../bin/art/art_3.09.15/Illumina_profiles/EmpMiSeq250R1.txt\n")
             fh_out.write("ART_QUAL_PROFILE_TSV2 = ../../bin/art/art_3.09.15/Illumina_profiles/EmpMiSeq250R2.txt\n")
@@ -345,7 +354,7 @@ def process_window_size((test_prefix, indiv, window_size)):
     ERR_FREE_ALN_CONSERVE_CSV = ALN_CONSERVE_CSV.replace(".reads", ".reads.errFree")
 
     for breadth in [0.7, 0.8, 0.9]:
-        for depth in [0.01*indiv, 0.05*indiv, 0.1*indiv]:
+        for depth in [0.01*indiv, 0.1*indiv]:
             OUT_DIR =   SIM_OUT_DIR + os.sep + test_prefix + os.sep + REF + os.sep + "window{}.breadth{}.depth{}".format(window_size, breadth, depth)
             ACTUAL_DNDS_FILENAME = OUT_DIR + os.sep + 'actual_dnds_by_site.csv'
             COLLATE_ACT_DNDS_FILENAME = OUT_DIR + os.sep + "collate_dnds.csv"
@@ -398,21 +407,22 @@ def process_window_size((test_prefix, indiv, window_size)):
 if __name__ == "__main__":
 
     pool = pool_traceback.LoggingPool(CONCURRENT_MPIRUN)
-    TEST_PREFIX_FORMAT = "small.cov{}.indiv{}.codon{}"
-    for cov in [5]:
-        for indiv in [1000]:
-            for codonsites in [500]:
+    TEST_PREFIX_FORMAT = "small.cov{}.indiv{}.codon{}.scale{}"
+    for cov in [1, 2, 5]:
+        for indiv in [1000, 2000]:
+            for codonsites in [140]:
+                for scales in [[5], [10], [20], [20]]:
+                    scales_join = "_".join([str(x) for x in scales])
+                    test_prefix = TEST_PREFIX_FORMAT.format(cov, indiv, codonsites, scales_join)
+                    config_file = SIM_DATA_DIR + os.sep + test_prefix + os.sep + test_prefix + ".config"
+                    LOGGER.debug("Handling simulated config " + config_file)
 
-                test_prefix = TEST_PREFIX_FORMAT.format(cov, indiv, codonsites)
-                config_file = SIM_DATA_DIR + os.sep + test_prefix + os.sep + test_prefix + ".config"
-                LOGGER.debug("Handling simulated config " + config_file)
-
-                gen_sim_data(config_file, indiv, codonsites, cov)
+                    gen_sim_data(config_file, indiv, codonsites, cov, scales)
 
 
-                for result in pool.imap_unordered(process_window_size, [(test_prefix, indiv, 200),
-                                                                        (test_prefix, indiv, 300),
-                                                                        (test_prefix, indiv, 350)]):
-                    pass
+                    for result in pool.imap_unordered(process_window_size, [(test_prefix, indiv, 200),
+                                                                            (test_prefix, indiv, 300),
+                                                                            (test_prefix, indiv, 350)]):
+                        pass
 
     pool.close()
