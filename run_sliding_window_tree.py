@@ -411,7 +411,7 @@ if __name__ == "__main__":
     for cov in [1, 2, 5]:
         for indiv in [1000, 2000]:
             for codonsites in [140]:
-                for scales in [[5], [10], [20], [20]]:
+                for scales in [[5], [10], [20], [50]]:
                     scales_join = "_".join([str(x) for x in scales])
                     test_prefix = TEST_PREFIX_FORMAT.format(cov, indiv, codonsites, scales_join)
                     config_file = SIM_DATA_DIR + os.sep + test_prefix + os.sep + test_prefix + ".config"
