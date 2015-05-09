@@ -397,7 +397,7 @@ def make1csv(inferred_dnds_dir, sim_data_dir, output_csv_filename):
                         outrow["File"] = inferred_collate_dnds_csv
                         outrow["Reads.Act"] = row["Reads"]
                         outrow["UnambigCodonRate.Act"] = float(row["CodonDepth"])/float(row["Reads"])
-                        outrow["AADepth.Act"]  = row["AADepth"]
+                        outrow["AADepth.Act"]  = row["AADepth"] if  row.get("AADepth") else None  # TODO: hack since some earlier simulations don't have this value
                         outrow["PopSize.Act"] = total_indiv
                         #outrow["ConserveTrueBase.Act"] = row["ConserveTrueBase"]
                         outrow["EntropyTrueBase.Act"] = row["EntropyTrueBase"]
