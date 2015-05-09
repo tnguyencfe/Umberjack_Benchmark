@@ -3,186 +3,101 @@
 library(knitr)
 library(caret)
 library(plyr)
-library(doMC)  # for parallele rfe
+#library(doMC)  # for parallele rfe
+library(doMPI)  # for MPI parallelism
+library(randomForest)
+library(pryr)
+
+
+FOLDS <- 1
+SEED <- 7
+PROCS <- 1
+
+slaves <- startMPIcluster(count=PROCS)
+registerDoMPI(slaves)
+
+
+## Note: if the underlying model also uses foreach, the
+## number of cores specified above will double (along with
+## the memory requirements)
+#registerDoMC(cores = PROCS)
+
 
 source("./load_all_sim_dnds.R")
+
 
 dnds <- get_all_sim_dnds()
 dim(dnds)
 summary(dnds)
 head(dnds)
+object_size(dnds)
+mem_used()
 
-
-NUM_RESP_NAMES <- c("LOD_dNdS", "Dist_dn_minus_dS", "Ratio_dNdS", "AbsLOD_dNdS", "AbsDist_dn_minus_dS")
-CAT_RESP_NAMES <- c("CrapLOD", "CrapDist")
+NUM_RESP_NAMES <- c("LOD_dNdS", "Dist_dn_minus_dS", "AbsLOD_dNdS", "AbsDist_dn_minus_dS")
+CAT_RESP_NAMES <- c("CrapLOD", "CrapDist", "wrongSelect")
 COVAR_NAMES <- colnames(dnds[sapply(dnds,is.numeric)])[!colnames(dnds[sapply(dnds,is.numeric)]) %in% NUM_RESP_NAMES]
-CAT_COVAR_NAMES <- c("IsLowSubst.Act")
+CAT_COVAR_NAMES <-  c() #c("IsLowSubst.Act")
 LM_COVAR_NAMES <- c(CAT_COVAR_NAMES, 
                     COVAR_NAMES[!(COVAR_NAMES %in% c("dNdS.Act", "dN_minus_dS.Act", "dN_minus_dS.Exp", 
                                                      # In separate analysis, conservation and entropy are highly correlated.
                                                      # When we use speedglm, it bugs out after it removes highly correlated variables.
                                                      # So we do it for them.
-                                                     "ConserveTrueBase.Act", "ConserveTrueBase.Exp", "Window_Conserve.Act",
-                                                     "UnambigCodonRate.Act", "Window_UnambigCodonRate.Act",
+                                                     "ConserveTrueBase.Act", "ConserveTrueBase.Exp", "Window_Conserve.Act",                                                     
                                                      # These are highly correlated with N, S
-                                                     "Subst.Act", "Subst.Exp",
+                                                     #"Subst.Act", "Subst.Exp",
                                                      "EN.Exp", "ES.Exp", "EN.Act", "ES.Act",
-                                                     "Window_Start", "Window_End", "CodonSite", "Reads.Act"
+                                                     "Window_Start", "Window_End", "CodonSite",
+                                                     "N.Exp", "S.Exp", "dNdS.Exp",
+                                                     "EntropyTrueBase.Exp"
+                                                     #"Reads.Act"
                     )
                     )])
 
-#  TODO:  remove this once we are confident about the function
-respname <- "CrapLOD"
-feats <- c(COVAR_NAMES, CAT_COVAR_NAMES)
+feats <- c(LM_COVAR_NAMES)
 
 
-# TODO:  do PCA to determine the total features we should keep 
-# based on the amount of independent signals within them
-# Or Parital Least Squares Analysis which finds the area under ROC for number of orthogonal components kept
-
-FOLDS <- 3
-SEED <- 7
-PROCS <- 3
-
-
-
-# Method 2: Random Forest, Recurisve Feature Elmination  (Backwards Selection)
-rf_feat_sel_class_rfe <- function(dnds, respname, feats) {
-  
-  print(paste0("Response=", respname))
-  print(paste0("Features=", paste0(feats, collapse=", ")))
-  
-  # Remove samples where response is NA
-  cleandnds <- dnds[!is.na(dnds[, respname]), ]
-  dim(cleandnds)
-  summary(cleandnds)
-  
-  # Random Forest Selection Function
-  # TODO:  should we rerank features after they are removed???
-  # This will auto resample and create bags for us
-  control <- rfeControl(functions=rfFuncs, method="boot", number=FOLDS)
-  
-  ## Note: if the underlying model also uses foreach, the
-  ## number of cores specified above will double (along with
-  ## the memory requirements)
-  registerDoMC(cores = PROCS)
-  
-  # TODO:  this can be parallelized across each bag
-  # This takes 6 minutes even for A bag only has 5000 samples.  You can get timing through results$timing
-  results <- rfe(x=cleandnds[, feats], y=cleandnds[, respname], sizes=c(1:length(feats)),
-                 rfeControl=control, 
-                 metric="Accuracy"  # This is for classification.  use another metric for regression
-  )
-  print(results)
-  # list the chosen features
-  print(predictors(results))  # results$optVariables also does the same)
-  # plot the results
-  plot(results, type=c("g", "o"))
-  # per-variable importance
-  print(varImp(results))
-  
-  # the time it took to finish
-  print(results$times)
-}
-
-
-# Method 2: Random Forest, Recurisve Feature Elmination  (Backwards Selection)  for continuous response
-rf_feat_sel_cont_rfe <- function(dnds, respname, feats) {
-  
-  print(paste0("Response=", respname))
-  print(paste0("Features=", paste0(feats, collapse=", ")))
-  
-  # Remove samples where response is NA
-  cleandnds <- dnds[!is.na(dnds[, respname]), ]
-  dim(cleandnds)
-  summary(cleandnds)
-  
-  # Random Forest Selection Function
-  # TODO:  should we rerank features after they are removed???
-  # This will auto resample and create bags for us
-  control <- rfeControl(functions=rfFuncs, method="boot", number=FOLDS)
-  
-  ## Note: if the underlying model also uses foreach, the
-  ## number of cores specified above will double (along with
-  ## the memory requirements)
-  registerDoMC(cores = PROCS)
-  
-  # TODO:  this can be parallelized across each bag
-  # This takes 6 minutes even for A bag only has 5000 samples.  You can get timing through results$timing
-  results <- rfe(x=cleandnds[, feats], y=cleandnds[, respname], sizes=c(1:length(feats)),
-                 rfeControl=control, 
-                 metric="RMSE"  # This is for continuous response
-  )
-  print(results)
-  # list the chosen features
-  print(predictors(results))  # results$optVariables also does the same
-  # plot the results
-  fig <- plot(results, type=c("g", "o"))
-  print(fig)
-  # per-variable importance
-  print(varImp(results))
-  
-  # the time it took to finish
-  print(results$times)
-}
-
-
-rf_feat_sel_class_rfe(dnds=dnds, respname="CrapLOD", feats=feats)
-
-# Random forest recursive backwards feature selection for continous response 
-#rf_feat_sel_cont_rfe(dnds=dnds, respname="AbsLOD_dNdS", feats=feats)
-#rf_feat_sel_cont_rfe(dnds=dnds, respname="AbsDist_dn_minus_dS", feats=feats)
-
-
-
-
-
-
-
-
-
-
-
+# crapLOD_results <- rf_feat_sel_class_rfe(dnds=dnds[!is.na(dnds$CrapLOD) & !is.na(dnds$dNdS.Act),], respname="CrapLOD", feats=feats)
+# wrongSelect_results <- rf_feat_sel_class_rfe(dnds=dnds[!is.na(dnds$wrongSelect) & !is.na(dnds$dNdS.Act),], respname="wrongSelect", feats=feats)
 # 
-# rf_feat_sel_class_cv <- function(dnds, respname, feats) {
-#   print(feats)
-#   
-#   # Remove samples where response is NA
-#   cleandnds <- dnds[!is.na(dnds[, respname]), ]
-#   dim(cleandnds)
-#   
-#   # Take bags of samples with replacement
-#   # Rows = number of training samples per bag, columns = number of bags aka number of partitions
-#   partitionMat <-createResample(y=cleandnds[, respname], times=FOLDS, list=FALSE)  # ???? Nope, this seems to select same sample twice for same bag
-#   print(dim(partitionMat))
-#   print(summary(partitionMat))
-#   totalUniqSamplesPerBag <- sapply(1:ncol(partitionMat), function(x) {length(unique(partitionMat[, x]))})
-#   print(totalUniqSamplesPerBag)
-#   
-#   for (bag in 1:FOLDS) {
-#     set.seed(SEED)
-#     bagSamples <- partitionMat[, bag]
-#     bag_dnds <- cleandnds[rownames(dnds) %in% bagSamples, ]    
-#     outbag_dnds <- cleandnds[!(rownames(dnds) %in% bagSamples), ]
-#     
-#     trainFormula <- as.formula(paste0(respname, "~", paste0(feats, collapse=" + ")))
-#     print(trainFormula)
-#     
-#     # Method 1: Cross Validation, then Average Importance Across Each Partition    
-#     
-#     
-#     # Cross Validation Function
-#     control <- trainControl(method="cv",number=FOLDS)
-#     
-#     fit <-train(trainFormula, data=bag_dnds, method="rf",
-#                 trControl=control,
-#                 prox=TRUE,allowParallel=TRUE)
-#     print(fit)
-#     
-#     imp <- print(varImp(fit)) 
-#   }  
-# }
+# 
+# rf_fit <- rf_train(dnds=dnds, respname="wrongSelect", feats=feats)
+# 
+# 
+# 
+# longshot_dnds <- read.table("/home/thuy/gitrepo/MutationPatterns/out_maskstopcodon_remdup/140415_M01841_0059_000000000-A64EA/collate_all.longshot.csv", sep=",", header=TRUE)
+# summary(longshot_dnds)
+# head(longshot_dnds)
+# 
+# 
+# preds <- predict(wrongSelect_results$fit, dnds[!is.na(dnds$CrapLOD) & !is.na(dnds$dNdS.Act),])
+# 
+# preds_longshot <- predict(wrongSelect_results$fit, longshot_dnds[!is.na(longshot_dnds$dNdS.Act), 
+#                                                     c("Window_Start", "File", "CodonSite", "S.Act", "N.Act", "EntropyTrueBase.Act", "UnambigCodonRate.Act", "Reads.Act")])
+# sum(preds_longshot==TRUE)
+# 
+# length(preds_longshot)
+# 
+# 
+# longshot_pred_dat <- longshot_dnds[!is.na(longshot_dnds$dNdS.Act), 
+#                                    c("Window_Start", "File", "CodonSite", "S.Act", "N.Act", "EntropyTrueBase.Act", "UnambigCodonRate.Act", "Reads.Act")]
+# 
+# longshot_pred_dat$Pred <- preds_longshot
+# 
+# write.table(longshot_pred_dat, "longshot_pred.csv", sep=",", row.names=FALSE)
+# 
+# 
+# head(longshot_pred_dat[longshot_pred_dat$Pred==TRUE,])
 
+
+print("About to do random forest regression")
+rf_feat_sel_cont_rfe <- rf_feat_sel_cont_rfe(dnds=dnds, respname="LOD_dNdS", feats=feats)
+# Get the predictions for the training data?
+preds <- predict(rfe_cont_results$fit, dnds[!is.na(dnds$LOD_dNdS),])
+# Get the mean squared error for each tree
+# mse = (sum of squared residuals)/n
+rfe_cont_results$fit$mse
+# r-sq for each tree = 1-mse/var(response)
+rfe_cont_results$fit$mse
 
 
 # Remove highly correlated features so that speedglm doesn't crash due to bug where it doesn't update size of response var 
@@ -197,3 +112,7 @@ rf_feat_sel_class_rfe(dnds=dnds, respname="CrapLOD", feats=feats)
 # length(highlyCorrelated)
 # # print indexes of highly correlated attributes
 # print(highlyCorrelated)
+
+
+closeCluster(slaves)
+mpi.quit()
