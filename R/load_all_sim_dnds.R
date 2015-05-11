@@ -4,8 +4,8 @@ library(plyr)
 PSEUDOCOUNT <- 1e-7
 
 get_all_sim_dnds <- function() {
-  DNDS_FILENAME <- "../simulations/out/collate_all.small.csv"
-  #DNDS_FILENAME <- "../simulations/out/collate_all.csv"
+  #DNDS_FILENAME <- "../simulations/out/collate_all.small.csv"
+  DNDS_FILENAME <- "../simulations/out/collate_all.med.csv"
   
   dnds <- read.table(DNDS_FILENAME, header=TRUE, sep=",", na.strings=c("", "None"))
   dim(dnds)
@@ -16,7 +16,7 @@ get_all_sim_dnds <- function() {
   #dnds$UnambigCodonRate.Act <- dnds$UnambigCodons.Act/ dnds$Reads.Act  # per-window-codonsite fraction of unambiguous codons
   dnds$Subst.Act <- dnds$N.Act + dnds$S.Act
   dnds$Subst.Exp <- dnds$N.Exp + dnds$S.Exp
-  #dnds$Cov.Act <- dnds$Reads.Act/dnds$PopSize.Act
+  dnds$Cov.Act <- dnds$Reads.Act/dnds$PopSize.Act
   #dnds$IsLowSubst.Act <- as.factor(dnds$N.Act < 1 | dnds$S.Act < 1)
   #dnds <- subset(dnds, select=-c(PopSize.Act, ErrBase.Act, AmbigPadBase.Act, UnambigCodons.Act))
   dim(dnds)
@@ -41,15 +41,14 @@ get_all_sim_dnds <- function() {
   
   
   
-  # Now remove window-codonsites where there is no dnds and no dn-ds information because of insufficient window sequences
-  # NOOOO:  don't remove because this forms part of the crappy prediction
-  #dnds <- dnds[!is.na(dnds$dN_minus_dS.Exp) & !is.na(dnds$N.Act), ]
+  # Do not remove window-codonsites where there is no dnds and no dn-ds information because of insufficient window sequences.
+  # But do remove window codon sites in which there are no true dn/ds because of zero synonymous substitutions.
   dnds <- dnds[!is.na(dnds$dNdS.Exp), ]
   dim(dnds)
   summary(dnds)
   
   
-  # Ignore dN/dS == 0 for numerical stability
+  # Add a PSEUDOCOUNT so that dN/dS == 0 does not cause numerical instability
   dnds$LOD_dNdS <- log(dnds$dNdS.Act + PSEUDOCOUNT) - log(dnds$dNdS.Exp + PSEUDOCOUNT)
   dnds$AbsLOD_dNdS <- abs(dnds$LOD_dNdS)
 
@@ -75,38 +74,69 @@ rf_feat_sel_class_rfe <- function(dnds, respname, feats) {
   print(paste0("Response=", respname))
   print(paste0("Features=", paste0(feats, collapse=", ")))
   
-  # Remove samples where response is NA
-  cleandnds <- dnds[!is.na(dnds[, respname]), ]
-  dim(cleandnds)
-  summary(cleandnds)
+  # Remove samples where response, features is NA
+  cleandnds_diversify <- na.omit(dnds[, c(feats, respname)])
+  print(dim(cleandnds_diversify))
+  print(summary(cleandnds_diversify))
   
+  # Override default fit function from rfFuncs to use 501 trees instead of default 500 
+  # so that we can break ties
+  new_rfFuncs <- rfFuncs
+  new_rfFuncs$fit <- 
+    function (x, y, first, last, ...) 
+    {
+      library(randomForest)
+      # keep track of which samples are in which bag in which trees
+      randomForest(x, y, importance = first, ntree=501, keep.inbag=TRUE, ...)
+    }
   # Random Forest Selection Function
-  # TODO:  should we rerank features after they are removed???
-  # This will auto resample and create bags for us
-  control <- rfeControl(functions=rfFuncs, method="boot", number=FOLDS)
+  # This will auto resample and create bags for us.  
+  # Only rank features on first iteration when all features are used, 
+  #   so that we get more accurate depiction of how much
+  #   feature matters when all features considered.
+  control <- rfeControl(functions=new_rfFuncs, method="boot", number=FOLDS, 
+                        #rerank=TRUE,  # rerank features after eliminate
+                        saveDetails=TRUE,   # save predictions and variable importances from selection process
+                        returnResamp="all",   # save all resampling summary metrics
+                        verbose=TRUE
+  )
   
  
-  # TODO:  this can be parallelized across each bag
+  # This is automatically parallelized across each bag when you use doMC or doMPI library.
   # This takes 6 minutes even for A bag only has 5000 samples.  You can get timing through results$timing
-  rfe_class_results <- rfe(x=cleandnds[, feats], y=cleandnds[, respname], sizes=c(1:length(feats)),
+  rfe_class_results <- rfe(x=cleandnds_diversify[, feats], y=cleandnds_diversify[, respname], 
+                           sizes=c(1:length(feats)),
                            rfeControl=control, 
                            metric="Accuracy"  # This is for classification.  use another metric for regression
   )
+  
+  
   
   # save the classifier feature selection results (including its fit) to file 
   # so that we can load the environment variable back again later.
   save(rfe_class_results, file="rfe_class_results.RData")
   
+  # save the training data
+  save(cleandnds_diversify, file="cleandnds_diversify.RData")
+  
   print(rfe_class_results)
   # list the chosen features
   print(predictors(rfe_class_results))  # results$optVariables also does the same)
+  
   # plot the results
-  #plot(rfe_class_results, type=c("g", "o"))
+  fig <- ggplot(rfe_class_results, metric = rfe_class_results$metric[1], output = "layered")
+  ggsave(filename="RandomForestClassifyDiversifyFeatureElbow.pdf", plot=fig, device=pdf)
+  
+  
+  # print confusion matrix
+  print(rfe_class_results$fit$confusion)
+  
   # per-variable importance
   print(varImp(rfe_class_results))
   
   # the time it took to finish
   print(rfe_class_results$times)
+  
   return (rfe_class_results)
 }
 
@@ -124,7 +154,7 @@ rf_feat_sel_cont_rfe <- function(dnds, respname, feats) {
   print("Cleaned dnds summary:")
   print(summary(cleandnds))
   
-  
+  # Override default number of trees from 500 to 501 to break ties
   new_rfFuncs <- rfFuncs
   new_rfFuncs$fit <- 
     function (x, y, first, last, ...) 
@@ -134,8 +164,6 @@ rf_feat_sel_cont_rfe <- function(dnds, respname, feats) {
     }
   # Random Forest Selection Function
   # This will auto resample and create bags for us.
-  # Uses default number of trees = 500.  
-  # TODO:  But we want to be able to break ties, so use odd number.
   control <- rfeControl(functions=new_rfFuncs, method="boot", number=FOLDS, 
                         #rerank=TRUE,  # rerank features after eliminate
                         saveDetails=TRUE,   # save predictions and variable importances from selection process
@@ -143,7 +171,7 @@ rf_feat_sel_cont_rfe <- function(dnds, respname, feats) {
                         verbose=TRUE
                         )
     
-  # TODO:  this can be parallelized across each bag
+  # Automatically parallelized when you use library doMC or doMPI
   # This takes 6 minutes even for A bag only has 5000 samples.  You can get timing through results$timing
   rfe_cont_results <- rfe(x=cleandnds[, feats], y=cleandnds[, respname], 
                           sizes=c(1:length(feats)),
@@ -246,7 +274,7 @@ rf_train <- function(dnds, respname, feats) {
 }
 
 
-# Does the 
+# Does all the work for regression
 do_predict_cont <- function() {
   
   dnds <- get_all_sim_dnds()
@@ -282,9 +310,9 @@ do_predict_cont <- function() {
   print("About to do random forest regression")
   rfe_cont_results <- rf_feat_sel_cont_rfe(dnds=dnds, respname="LOD_dNdS", feats=feats)
   
-  # Get the predictions for all of the simulation data
-  lod_dnds_dat <- na.omit(dnds[, c("LOD_dNdS", feats, "dNdS.Act", "dNdS.Exp")])
-  lod_dnds_dat$pred <- predict(rfe_cont_results$fit, lod_dnds_dat)
+  # Get the predictions for all of the simulation data  
+  lod_dnds_dat <- dnds[rowSums(is.na(dnds[, c("LOD_dNdS", feats)])) == 0,]  
+  lod_dnds_dat$pred <- predict(rfe_cont_results$fit, lod_dnds_dat[, c(feats)])
   lod_dnds_dat$residual <- lod_dnds_dat$LOD_dNdS - lod_dnds_dat$pred
   
   # Get the MSE for all of the simulation data predictions
@@ -311,6 +339,60 @@ do_predict_cont <- function() {
   ggtitle(paste("RandomForest Regression in R r^2=", r2, sep=""))
   
   ggsave(filename="RandomForestRegressionRsq.pdf", plot=fig, device=pdf)
+  
+  
+  print(paste0("memused = ", mem_used()))
+}
+
+
+
+# Does all the work for finding Umberjack accuracy for classifying sites as Diversifying
+do_predict_class_diversify <- function() {
+  
+  dnds <- get_all_sim_dnds()
+  dim(dnds)
+  summary(dnds)
+  head(dnds)
+  object_size(dnds)
+  mem_used()
+  
+  NUM_RESP_NAMES <- c("LOD_dNdS", "Dist_dn_minus_dS", "AbsLOD_dNdS", "AbsDist_dn_minus_dS")
+  CAT_RESP_NAMES <- c("CrapLOD", "CrapDist", "wrongSelect")
+  COVAR_NAMES <- colnames(dnds[sapply(dnds,is.numeric)])[!colnames(dnds[sapply(dnds,is.numeric)]) %in% NUM_RESP_NAMES]
+  CAT_COVAR_NAMES <-  c() #c("IsLowSubst.Act")
+  LM_COVAR_NAMES <- c(CAT_COVAR_NAMES, 
+                      COVAR_NAMES[!(COVAR_NAMES %in% c("dNdS.Act", "dN_minus_dS.Act", "dN_minus_dS.Exp",                                                        
+                                                       "ConserveTrueBase.Act", "ConserveTrueBase.Exp", "Window_Conserve.Act",
+                                                       "EN.Exp", "ES.Exp", "EN.Act", "ES.Act",
+                                                       "Window_Start", "Window_End", "CodonSite",
+                                                       "N.Exp", "S.Exp", "dNdS.Exp",
+                                                       "EntropyTrueBase.Exp"
+                                                       
+                      )
+                      )])
+  
+  feats <- c(LM_COVAR_NAMES)
+  
+  
+  print("About to do random forest feature selection to determine what affects accuracy of umberjack predictions of diversifying sites")
+  rfe_class_results <- rf_feat_sel_class_rfe(dnds=dnds, respname="wrongSelect", feats=feats)
+  
+  # Get the predictions for all of the simulation data
+  wrongselect_dnds_dat <- dnds[rowSums(is.na(dnds[, c("wrongSelect", feats)])) == 0, ]  
+  summary(wrongselect_dnds_dat)
+  wrongselect_dnds_dat$pred <- predict(rfe_class_results$fit, wrongselect_dnds_dat[, c(feats)])
+  
+  # Make confusion matrix
+  confuse <- with(wrongselect_dnds_dat, table(wrongSelect, pred))
+  print(confuse)
+  
+  # Get accuracy for all of the simulation data predictions  (biased - should use OOB instead)
+  accuracy <- sum(wrongselect_dnds_dat$wrongSelect == wrongselect_dnds_dat$pred, na.rm=TRUE)/sum(!is.na(wrongselect_dnds_dat$wrongSelect) & !is.na(wrongselect_dnds_dat$pred))
+  print(accuracy)
+  
+    
+  # Save the predictions to file
+  write.table(wrongselect_dnds_dat, file="umberjack_diversify_accuracy_predict.csv", sep=",", row.names=FALSE)
   
   
   print(paste0("memused = ", mem_used()))
