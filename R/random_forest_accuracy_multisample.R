@@ -2,13 +2,13 @@
 # This is just an mpi wrapper for load_all_sim_dnds.R which does all the work
 
 
-library(knitr)
+
 library(caret)
 library(plyr)
-#library(doMC)  # for parallele rfe
 library(doMPI)  # for MPI parallelism
 library(randomForest)
 library(pryr)
+#install.packages("pryr", repos=c("http://cran.stat.sfu.ca/"))
 library(miscTools)  # for rSquared
 
 FOLDS <- 5

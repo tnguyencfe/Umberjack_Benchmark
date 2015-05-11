@@ -4,8 +4,8 @@ library(plyr)
 PSEUDOCOUNT <- 1e-7
 
 get_all_sim_dnds <- function() {
-  DNDS_FILENAME <- "/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/collate_all.small.csv"
-  #DNDS_FILENAME <- "/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/collate_all.med.csv"
+  DNDS_FILENAME <- "../simulations/out/collate_all.small.csv"
+  #DNDS_FILENAME <- "../simulations/out/collate_all.csv"
   
   dnds <- read.table(DNDS_FILENAME, header=TRUE, sep=",", na.strings=c("", "None"))
   dim(dnds)
