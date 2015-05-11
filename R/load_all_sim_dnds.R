@@ -101,7 +101,7 @@ rf_feat_sel_class_rfe <- function(dnds, respname, feats) {
   # list the chosen features
   print(predictors(rfe_class_results))  # results$optVariables also does the same)
   # plot the results
-  plot(rfe_class_results, type=c("g", "o"))
+  #plot(rfe_class_results, type=c("g", "o"))
   # per-variable importance
   print(varImp(rfe_class_results))
   
