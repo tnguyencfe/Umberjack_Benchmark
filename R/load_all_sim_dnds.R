@@ -117,8 +117,8 @@ rf_feat_sel_cont_rfe <- function(dnds, respname, feats) {
   print(paste0("Response=", respname))
   print(paste0("Features=", paste0(feats, collapse=", ")))
   
-  # Remove samples where response is NA
-  cleandnds <- dnds[!is.na(dnds[, respname]), ]
+  # Remove samples where response, features is NA
+  cleandnds <- na.omit(dnds[, c(respname, feats)])
   print("Cleaned dnds dimensions:")
   print(dim(cleandnds))
   print("Cleaned dnds summary:")
@@ -138,23 +138,23 @@ rf_feat_sel_cont_rfe <- function(dnds, respname, feats) {
   # TODO:  But we want to be able to break ties, so use odd number.
   control <- rfeControl(functions=new_rfFuncs, method="boot", number=FOLDS, 
                         #rerank=TRUE,  # rerank features after eliminate
-                        #saveDetails=TRUE,   # save predictions and variable importances from selection process
-                        #returnResamp="all",   # save all resampling summary metrics
+                        saveDetails=TRUE,   # save predictions and variable importances from selection process
+                        returnResamp="all",   # save all resampling summary metrics
                         verbose=TRUE
                         )
     
   # TODO:  this can be parallelized across each bag
   # This takes 6 minutes even for A bag only has 5000 samples.  You can get timing through results$timing
   rfe_cont_results <- rfe(x=cleandnds[, feats], y=cleandnds[, respname], 
-                          #sizes=c(1:length(feats)),
-                          sizes=c(1:2),
+                          sizes=c(1:length(feats)),
                           rfeControl=control, 
                           metric="RMSE"  # This is for continuous response
                           )
   
   # Save the rfe_cont_results environment object to file.
   save(rfe_cont_results, file="rfe_cont_results.RData")
-  
+  # Save the training dataset to feil
+  save(cleandnds, file="cleandnds.RData")
   
   print(rfe_cont_results)
   # list the chosen features
@@ -243,4 +243,75 @@ rf_train <- function(dnds, respname, feats) {
   overall_accuracy=100-overall_error
   print(overall_accuracy)
   return (rf_output)
+}
+
+
+# Does the 
+do_predict_cont <- function() {
+  
+  dnds <- get_all_sim_dnds()
+  dim(dnds)
+  summary(dnds)
+  head(dnds)
+  object_size(dnds)
+  mem_used()
+  
+  NUM_RESP_NAMES <- c("LOD_dNdS", "Dist_dn_minus_dS", "AbsLOD_dNdS", "AbsDist_dn_minus_dS")
+  CAT_RESP_NAMES <- c("CrapLOD", "CrapDist", "wrongSelect")
+  COVAR_NAMES <- colnames(dnds[sapply(dnds,is.numeric)])[!colnames(dnds[sapply(dnds,is.numeric)]) %in% NUM_RESP_NAMES]
+  CAT_COVAR_NAMES <-  c() #c("IsLowSubst.Act")
+  LM_COVAR_NAMES <- c(CAT_COVAR_NAMES, 
+                      COVAR_NAMES[!(COVAR_NAMES %in% c("dNdS.Act", "dN_minus_dS.Act", "dN_minus_dS.Exp", 
+                                                       # In separate analysis, conservation and entropy are highly correlated.
+                                                       # When we use speedglm, it bugs out after it removes highly correlated variables.
+                                                       # So we do it for them.
+                                                       "ConserveTrueBase.Act", "ConserveTrueBase.Exp", "Window_Conserve.Act",                                                     
+                                                       # These are highly correlated with N, S
+                                                       #"Subst.Act", "Subst.Exp",
+                                                       "EN.Exp", "ES.Exp", "EN.Act", "ES.Act",
+                                                       "Window_Start", "Window_End", "CodonSite",
+                                                       "N.Exp", "S.Exp", "dNdS.Exp",
+                                                       "EntropyTrueBase.Exp"
+                                                       #"Reads.Act"
+                      )
+                      )])
+  
+  feats <- c(LM_COVAR_NAMES)
+  
+  
+  print("About to do random forest regression")
+  rfe_cont_results <- rf_feat_sel_cont_rfe(dnds=dnds, respname="LOD_dNdS", feats=feats)
+  
+  # Get the predictions for all of the simulation data
+  lod_dnds_dat <- na.omit(dnds[, c("LOD_dNdS", feats, "dNdS.Act", "dNdS.Exp")])
+  lod_dnds_dat$pred <- predict(rfe_cont_results$fit, lod_dnds_dat)
+  lod_dnds_dat$residual <- lod_dnds_dat$LOD_dNdS - lod_dnds_dat$pred
+  
+  # Get the MSE for all of the simulation data predictions
+  mse <- mean((lod_dnds_dat$residual)^2)
+  print("MSE for all simulation data")
+  print(mse)
+  
+  # Get the RSquared for all of the simulation data predictions
+  r2 <- rSquared(y=lod_dnds_dat$LOD_dNdS, resid=lod_dnds_dat$residual)
+  print("RSquared for all simulation data")
+  print(r2)
+  
+  
+  # Save the predictions to file
+  write.table(lod_dnds_dat, file="umberjack_accuracy_predict.csv", sep=",", row.names=FALSE)
+  
+  # Plot the random forest regression fit
+  fig <- ggplot(lod_dnds_dat, aes(x=LOD_dNdS, y=pred)) + 
+    geom_point(alpha=0.5, shape=1) +
+    geom_smooth(method="lm") + 
+    geom_abline(color="red") +
+    xlab("\n Ln (Umberjack / True dNdS)") + 
+    ylab("RF Predicted Ln (Umberjack / True dNdS) \n")
+  ggtitle(paste("RandomForest Regression in R r^2=", r2, sep=""))
+  
+  ggsave(filename="RandomForestRegressionRsq.pdf", plot=fig, device=pdf)
+  
+  
+  print(paste0("memused = ", mem_used()))
 }
