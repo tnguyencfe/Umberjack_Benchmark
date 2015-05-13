@@ -4,8 +4,8 @@ library(plyr)
 PSEUDOCOUNT <- 1e-7
 
 get_all_sim_dnds <- function() {
-  #DNDS_FILENAME <- "../simulations/out/collate_all.small.csv"
-  DNDS_FILENAME <- "../simulations/out/collate_all.med.csv"
+  DNDS_FILENAME <- "../simulations/out/collate_all.small.csv"
+  #DNDS_FILENAME <- "../simulations/out/collate_all.csv"
   
   dnds <- read.table(DNDS_FILENAME, header=TRUE, sep=",", na.strings=c("", "None"))
   dim(dnds)
@@ -282,7 +282,7 @@ do_predict_cont <- function() {
   summary(dnds)
   head(dnds)
   object_size(dnds)
-  mem_used()
+  print(paste0("mem used from dnds=", mem_used()))
   
   NUM_RESP_NAMES <- c("LOD_dNdS", "Dist_dn_minus_dS", "AbsLOD_dNdS", "AbsDist_dn_minus_dS")
   CAT_RESP_NAMES <- c("CrapLOD", "CrapDist", "wrongSelect")
@@ -309,6 +309,8 @@ do_predict_cont <- function() {
   
   print("About to do random forest regression")
   rfe_cont_results <- rf_feat_sel_cont_rfe(dnds=dnds, respname="LOD_dNdS", feats=feats)
+  
+  print(paste0("Mem Bytes after RF=", mem_used()))
   
   # Get the predictions for all of the simulation data  
   lod_dnds_dat <- dnds[rowSums(is.na(dnds[, c("LOD_dNdS", feats)])) == 0,]  
@@ -341,7 +343,7 @@ do_predict_cont <- function() {
   ggsave(filename="RandomForestRegressionRsq.pdf", plot=fig, device=pdf)
   
   
-  print(paste0("memused = ", mem_used()))
+  print(paste0("memused after finish= ", mem_used()))
 }
 
 
@@ -354,7 +356,7 @@ do_predict_class_diversify <- function() {
   summary(dnds)
   head(dnds)
   object_size(dnds)
-  mem_used()
+  print(paste0("dnds mem=", mem_used()))
   
   NUM_RESP_NAMES <- c("LOD_dNdS", "Dist_dn_minus_dS", "AbsLOD_dNdS", "AbsDist_dn_minus_dS")
   CAT_RESP_NAMES <- c("CrapLOD", "CrapDist", "wrongSelect")
@@ -390,10 +392,9 @@ do_predict_class_diversify <- function() {
   accuracy <- sum(wrongselect_dnds_dat$wrongSelect == wrongselect_dnds_dat$pred, na.rm=TRUE)/sum(!is.na(wrongselect_dnds_dat$wrongSelect) & !is.na(wrongselect_dnds_dat$pred))
   print(accuracy)
   
-    
   # Save the predictions to file
   write.table(wrongselect_dnds_dat, file="umberjack_diversify_accuracy_predict.csv", sep=",", row.names=FALSE)
   
-  
   print(paste0("memused = ", mem_used()))
+  
 }

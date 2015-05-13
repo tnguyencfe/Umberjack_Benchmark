@@ -10,9 +10,9 @@ library(randomForest)
 library(pryr)
 
 
-FOLDS <- 1
+FOLDS <- 5
 SEED <- 7
-PROCS <- 1
+PROCS <- 5
 
 source("./load_all_sim_dnds.R")
 
