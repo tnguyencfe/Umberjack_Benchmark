@@ -293,7 +293,8 @@ do_predict_cont <- function() {
                                                        "dN_minus_dS.Act", "dN_minus_dS.Exp",                                                        
                                                        "ConserveTrueBase.Act", "ConserveTrueBase.Exp", "Window_Conserve.Act",                                                     
                                                        "EN.Exp", "ES.Exp", "EN.Act", "ES.Act",
-                                                       "Window_Start", "Window_End", "CodonSite"
+                                                       "Window_Start", "Window_End", "CodonSite",
+                                                       "Subst.Act", "Subst.Exp"
                       )
                       )])
   
@@ -360,7 +361,8 @@ do_predict_class_diversify <- function() {
                                                        "dN_minus_dS.Act", "dN_minus_dS.Exp",                                                        
                                                        "ConserveTrueBase.Act", "ConserveTrueBase.Exp", "Window_Conserve.Act",                                                     
                                                        "EN.Exp", "ES.Exp", "EN.Act", "ES.Act",
-                                                       "Window_Start", "Window_End", "CodonSite"
+                                                       "Window_Start", "Window_End", "CodonSite",
+                                                       "Subst.Act", "Subst.Exp"
                                                        
                       )
                       )])
@@ -421,7 +423,7 @@ do_predict_class_diversify_real <- function() {
                                                        "ErrBaseRate.Act",
                                                        "N.Exp", "S.Exp", 
                                                        "EntropyTrueBase.Exp",
-                                                       "Subst.Exp"
+                                                       "Subst.Act", "Subst.Exp"
                                                        
                       )
                       )])
