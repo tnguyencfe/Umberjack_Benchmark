@@ -59,8 +59,8 @@ get_all_sim_dnds <- function() {
   dnds$wrongSelect <- FALSE
   dnds$wrongSelect <- as.factor((dnds$dNdS.Act < 1 & dnds$dNdS.Exp > 1) | (dnds$dNdS.Act < 1 & dnds$dNdS.Exp > 1))
   dnds$wrongSelect[is.na(dnds$dNdS.Act)] <- TRUE
-  summary(dnds)
-  dim(dnds)
+  print(dim(dnds))  
+  print(summary(dnds))  
   head(dnds)
   
   return (dnds)
@@ -289,18 +289,11 @@ do_predict_cont <- function() {
   COVAR_NAMES <- colnames(dnds[sapply(dnds,is.numeric)])[!colnames(dnds[sapply(dnds,is.numeric)]) %in% NUM_RESP_NAMES]
   CAT_COVAR_NAMES <-  c() #c("IsLowSubst.Act")
   LM_COVAR_NAMES <- c(CAT_COVAR_NAMES, 
-                      COVAR_NAMES[!(COVAR_NAMES %in% c("dNdS.Act", "dN_minus_dS.Act", "dN_minus_dS.Exp", 
-                                                       # In separate analysis, conservation and entropy are highly correlated.
-                                                       # When we use speedglm, it bugs out after it removes highly correlated variables.
-                                                       # So we do it for them.
+                      COVAR_NAMES[!(COVAR_NAMES %in% c("dNdS.Act", "dNdS.Exp",
+                                                       "dN_minus_dS.Act", "dN_minus_dS.Exp",                                                        
                                                        "ConserveTrueBase.Act", "ConserveTrueBase.Exp", "Window_Conserve.Act",                                                     
-                                                       # These are highly correlated with N, S
-                                                       #"Subst.Act", "Subst.Exp",
                                                        "EN.Exp", "ES.Exp", "EN.Act", "ES.Act",
-                                                       "Window_Start", "Window_End", "CodonSite",
-                                                       "N.Exp", "S.Exp", "dNdS.Exp",
-                                                       "EntropyTrueBase.Exp"
-                                                       #"Reads.Act"
+                                                       "Window_Start", "Window_End", "CodonSite"
                       )
                       )])
   
@@ -363,12 +356,11 @@ do_predict_class_diversify <- function() {
   COVAR_NAMES <- colnames(dnds[sapply(dnds,is.numeric)])[!colnames(dnds[sapply(dnds,is.numeric)]) %in% NUM_RESP_NAMES]
   CAT_COVAR_NAMES <-  c() #c("IsLowSubst.Act")
   LM_COVAR_NAMES <- c(CAT_COVAR_NAMES, 
-                      COVAR_NAMES[!(COVAR_NAMES %in% c("dNdS.Act", "dN_minus_dS.Act", "dN_minus_dS.Exp",                                                        
-                                                       "ConserveTrueBase.Act", "ConserveTrueBase.Exp", "Window_Conserve.Act",
+                      COVAR_NAMES[!(COVAR_NAMES %in% c("dNdS.Act", "dNdS.Exp",
+                                                       "dN_minus_dS.Act", "dN_minus_dS.Exp",                                                        
+                                                       "ConserveTrueBase.Act", "ConserveTrueBase.Exp", "Window_Conserve.Act",                                                     
                                                        "EN.Exp", "ES.Exp", "EN.Act", "ES.Act",
-                                                       "Window_Start", "Window_End", "CodonSite",
-                                                       "N.Exp", "S.Exp", "dNdS.Exp",
-                                                       "EntropyTrueBase.Exp"
+                                                       "Window_Start", "Window_End", "CodonSite"
                                                        
                       )
                       )])
@@ -394,6 +386,70 @@ do_predict_class_diversify <- function() {
   
   # Save the predictions to file
   write.table(wrongselect_dnds_dat, file="umberjack_diversify_accuracy_predict.csv", sep=",", row.names=FALSE)
+  
+  print(paste0("memused = ", mem_used()))
+  
+}
+
+
+
+# Does all the work for finding Umberjack accuracy for classifying real sites 
+# with unknown expected values as Diversifying
+do_predict_class_diversify_real <- function() {
+  
+  dnds <- get_all_sim_dnds()
+  dim(dnds)
+  summary(dnds)
+  head(dnds)
+  object_size(dnds)
+  print(paste0("dnds mem=", mem_used()))
+  
+  NUM_RESP_NAMES <- c("LOD_dNdS", "Dist_dn_minus_dS", "AbsLOD_dNdS", "AbsDist_dn_minus_dS")
+  CAT_RESP_NAMES <- c("CrapLOD", "CrapDist", "wrongSelect")
+  COVAR_NAMES <- colnames(dnds[sapply(dnds,is.numeric)])[!colnames(dnds[sapply(dnds,is.numeric)]) %in% NUM_RESP_NAMES]
+  CAT_COVAR_NAMES <-  c() #c("IsLowSubst.Act")
+  LM_COVAR_NAMES <- c(CAT_COVAR_NAMES, 
+                      COVAR_NAMES[!(COVAR_NAMES %in% c("dNdS.Act", "dNdS.Exp",
+                                                       "dN_minus_dS.Act", "dN_minus_dS.Exp",                                                        
+                                                       "ConserveTrueBase.Act", "ConserveTrueBase.Exp", 
+                                                       "Window_Conserve.Act",
+                                                       "Window_ErrBaseRate.Act",
+                                                       "EN.Exp", "ES.Exp", "EN.Act", "ES.Act",
+                                                       "Window_Start", "Window_End", "CodonSite",
+                                                       "PopSize.Act",
+                                                       "Cov.Act",
+                                                       "ErrBaseRate.Act",
+                                                       "N.Exp", "S.Exp", 
+                                                       "EntropyTrueBase.Exp",
+                                                       "Subst.Exp"
+                                                       
+                      )
+                      )])
+  
+  feats <- c(LM_COVAR_NAMES)
+  
+  
+  print("About to do random forest feature selection to determine what affects accuracy of umberjack predictions of diversifying real sites")
+  rfe_class_results_real <- rf_feat_sel_class_rfe(dnds=dnds, respname="wrongSelect", feats=feats)
+  
+  # save env to file
+  save(rfe_class_results_real, "rfe_class_results_real.RData")
+  
+  # Get the predictions for all of the simulation data
+  wrongselect_dnds_dat <- dnds[rowSums(is.na(dnds[, c("wrongSelect", feats)])) == 0, ]  
+  summary(wrongselect_dnds_dat)
+  wrongselect_dnds_dat$pred <- predict(rfe_class_results$fit, wrongselect_dnds_dat[, c(feats)])
+  
+  # Make confusion matrix
+  confuse <- with(wrongselect_dnds_dat, table(wrongSelect, pred))
+  print(confuse)
+  
+  # Get accuracy for all of the simulation data predictions  (biased - should use OOB instead)
+  accuracy <- sum(wrongselect_dnds_dat$wrongSelect == wrongselect_dnds_dat$pred, na.rm=TRUE)/sum(!is.na(wrongselect_dnds_dat$wrongSelect) & !is.na(wrongselect_dnds_dat$pred))
+  print(accuracy)
+  
+  # Save the predictions to file
+  write.table(wrongselect_dnds_dat, file="umberjack_diversify_accuracy_predict_real.csv", sep=",", row.names=FALSE)
   
   print(paste0("memused = ", mem_used()))
   
