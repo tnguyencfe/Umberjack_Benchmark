@@ -435,12 +435,12 @@ do_predict_class_diversify_real <- function() {
   rfe_class_results_real <- rf_feat_sel_class_rfe(dnds=dnds, respname="wrongSelect", feats=feats)
   
   # save env to file
-  save(rfe_class_results_real, "rfe_class_results_real.RData")
+  save(rfe_class_results_real, file="rfe_class_results_real.RData")
   
   # Get the predictions for all of the simulation data
   wrongselect_dnds_dat <- dnds[rowSums(is.na(dnds[, c("wrongSelect", feats)])) == 0, ]  
   summary(wrongselect_dnds_dat)
-  wrongselect_dnds_dat$pred <- predict(rfe_class_results$fit, wrongselect_dnds_dat[, c(feats)])
+  wrongselect_dnds_dat$pred <- predict(rfe_class_results_real$fit, wrongselect_dnds_dat[, c(feats)])
   
   # Make confusion matrix
   confuse <- with(wrongselect_dnds_dat, table(wrongSelect, pred))
