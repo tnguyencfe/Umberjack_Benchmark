@@ -496,7 +496,7 @@ do_predict_cont_real <- function() {
   rfe_cont_results_real <- rf_feat_sel_cont_rfe(dnds=dnds, respname="LOD_dNdS", feats=feats)
   
   # Save environment var to file
-  save(rfe_cont_results_real, "rfe_cont_results_real.RData")
+  save(rfe_cont_results_real, file="rfe_cont_results_real.RData")
   
   print(paste0("Mem Bytes after RF=", mem_used()))
   
