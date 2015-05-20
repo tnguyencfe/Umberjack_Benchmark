@@ -456,3 +456,80 @@ do_predict_class_diversify_real <- function() {
   print(paste0("memused = ", mem_used()))
   
 }
+
+
+# Does all the work for finding Umberjack accuracy for classifying real sites 
+do_predict_cont_real <- function() {
+  
+  dnds <- get_all_sim_dnds()
+  dim(dnds)
+  summary(dnds)
+  head(dnds)
+  object_size(dnds)
+  print(paste0("mem used from dnds=", mem_used()))
+  
+  NUM_RESP_NAMES <- c("LOD_dNdS", "Dist_dn_minus_dS", "AbsLOD_dNdS", "AbsDist_dn_minus_dS")
+  CAT_RESP_NAMES <- c("CrapLOD", "CrapDist", "wrongSelect")
+  COVAR_NAMES <- colnames(dnds[sapply(dnds,is.numeric)])[!colnames(dnds[sapply(dnds,is.numeric)]) %in% NUM_RESP_NAMES]
+  CAT_COVAR_NAMES <-  c() #c("IsLowSubst.Act")
+  LM_COVAR_NAMES <- c(CAT_COVAR_NAMES, 
+                      COVAR_NAMES[!(COVAR_NAMES %in% c("dNdS.Act", "dNdS.Exp",
+                                                       "dN_minus_dS.Act", "dN_minus_dS.Exp",                                                        
+                                                       "ConserveTrueBase.Act", "ConserveTrueBase.Exp", 
+                                                       "Window_Conserve.Act",
+                                                       "Window_ErrBaseRate.Act",
+                                                       "EN.Exp", "ES.Exp", "EN.Act", "ES.Act",
+                                                       "Window_Start", "Window_End", "CodonSite",
+                                                       "PopSize.Act",
+                                                       "Cov.Act",
+                                                       "ErrBaseRate.Act",
+                                                       "N.Exp", "S.Exp", 
+                                                       "EntropyTrueBase.Exp",
+                                                       "Subst.Act", "Subst.Exp"
+                      )
+                      )])
+  
+  feats <- c(LM_COVAR_NAMES)
+  
+  
+  print("About to do random forest regression")
+  rfe_cont_results_real <- rf_feat_sel_cont_rfe(dnds=dnds, respname="LOD_dNdS", feats=feats)
+  
+  # Save environment var to file
+  save(rfe_cont_results_real, "rfe_cont_results_real.RData")
+  
+  print(paste0("Mem Bytes after RF=", mem_used()))
+  
+  # Get the predictions for all of the simulation data  
+  lod_dnds_dat <- dnds[rowSums(is.na(dnds[, c("LOD_dNdS", feats)])) == 0,]  
+  lod_dnds_dat$pred <- predict(rfe_cont_results_real$fit, lod_dnds_dat[, c(feats)])
+  lod_dnds_dat$residual <- lod_dnds_dat$LOD_dNdS - lod_dnds_dat$pred
+  
+  # Get the MSE for all of the simulation data predictions
+  mse <- mean((lod_dnds_dat$residual)^2)
+  print("MSE for all simulation data")
+  print(mse)
+  
+  # Get the RSquared for all of the simulation data predictions
+  r2 <- rSquared(y=lod_dnds_dat$LOD_dNdS, resid=lod_dnds_dat$residual)
+  print("RSquared for all simulation data")
+  print(r2)
+  
+  
+  # Save the predictions to file
+  write.table(lod_dnds_dat, file="umberjack_accuracy_predict.real.csv", sep=",", row.names=FALSE)
+  
+  # Plot the random forest regression fit
+  fig <- ggplot(lod_dnds_dat, aes(x=LOD_dNdS, y=pred)) + 
+    geom_point(alpha=0.5, shape=1) +
+    geom_smooth(method="lm") + 
+    geom_abline(color="red") +
+    xlab("\n Ln (Umberjack / True dNdS)") + 
+    ylab("RF Predicted Ln (Umberjack / True dNdS) \n")
+  ggtitle(paste("RandomForest Regression in R r^2=", r2, sep=""))
+  
+  ggsave(filename="RandomForestRegressionRsq.real.pdf", plot=fig, device=pdf)
+  
+  
+  print(paste0("memused after finish= ", mem_used()))
+}
