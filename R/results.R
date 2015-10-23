@@ -27,10 +27,10 @@ library(plyr)
 #    theme(strip.text.x = element_text(size = 14), axis.title=element_text(size=14), axis.text=element_text(size=14)) + 
 #    facet_wrap(~QualityFactor)
                        
-ACTUAL_DNDS_FILENAME<-"/home/thuy/gitrepo/SlidingWindow/test/simulations/out_hyphyfix/small.cov2.indiv1k.codon400.bwa.rand/consensus/window300/actual_dnds_by_site.csv"
-ACTUAL_ERRFREE_DNDS_FILENAME<-"/home/thuy/gitrepo/SlidingWindow/test/simulations/out_hyphyfix/small.cov2.indiv1k.codon400.bwa.rand/consensus/window300.errFree/actual_dnds_by_site.csv"
-EXPECTED_DNDS_FILENAME<-"/home/thuy/gitrepo/SlidingWindow/test/simulations/data/small.cov2.indiv1k.codon400.bwa.rand/mixed/small.cov2.indiv1k.codon400.bwa.rand.mixed.dnds.tsv"
-INDELIBLE_DNDS_FILENAME<-"/home/thuy/gitrepo/SlidingWindow/test/simulations/data/small.cov2.indiv1k.codon400.bwa.rand/mixed/small.cov2.indiv1k.codon400.bwa.rand.mixed.rates.csv"
+ACTUAL_DNDS_FILENAME<-"/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out_BK/small.cov2.indiv1000.codon1600/consensus/window300.breadth0.9.depth10.0/actual_dnds_by_site.csv" #/home/thuy/gitrepo/SlidingWindow/test/simulations/out_BK_hyphyfix/small.cov2.indiv1k.codon400.bwa.rand/consensus/window300/actual_dnds_by_site.csv"
+ACTUAL_ERRFREE_DNDS_FILENAME<- "/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out_BK/small.cov2.indiv1000.codon1600/consensus/window300.breadth0.9.depth10.0.errFree/actual_dnds_by_site.csv" # /home/thuy/gitrepo/SlidingWindow/test/simulations/out_BK_hyphyfix/small.cov2.indiv1k.codon400.bwa.rand/consensus/window300.errFree/actual_dnds_by_site.csv"
+EXPECTED_DNDS_FILENAME<-"/home/thuy/gitrepo/SlidingWindow/test/simulations/data/small.cov2.indiv1000.codon1600/mixed/small.cov2.indiv1000.codon1600.mixed.dnds.tsv"
+INDELIBLE_DNDS_FILENAME<-"/home/thuy/gitrepo/SlidingWindow/test/simulations/data/small.cov2.indiv1000.codon1600/mixed/small.cov2.indiv1000.codon1600.mixed.rates.csv"
 
 # Read in Indelible's intended dN/dS
 # Cols: Site,Interval,Scaling_factor,Rate_class,Omega
@@ -62,7 +62,6 @@ expected_dnds_start_nuc_pos <- 1
  
  expected_dnds$Omega <- expected_dnds$dN/expected_dnds$dS
  expected_dnds$Omega[expected_dnds$dS == 0] <- NA
-expected_dnds$Omega[expected_dnds$Observed.S.Changes < 1 | expected_dnds$Observed.NS.Changes < 1] <- NA
  dim(expected_dnds)
  head(expected_dnds)
  str(expected_dnds)
@@ -71,17 +70,18 @@ expected_dnds$Omega[expected_dnds$Observed.S.Changes < 1 | expected_dnds$Observe
  
   
  # check consistency
- all(expected_dnds$Site == actual_dnds$Site)
+all(expected_dnds$Site == actual_dnds$Site)
+all(expected_dnds$Site == actual_errFree_dnds$Site)
  
  
- 
+
 
 fullDat <- data.frame(Site=expected_dnds$Site,
-                      ActualTypical=actual_dnds$dNdSWeightByReadsNoLowSyn, 
-                      ActualPerfect=actual_errFree_dnds$dNdSWeightByReadsNoLowSyn, 
-                      Expected=expected_dnds$Omega, 
-                      Scaling=indelible_dnds$Scaling_factor)
-
+                      ActualTypical=actual_dnds$dNdSWeightByReadsNoLowSub, 
+                      ActualPerfect=actual_errFree_dnds$dNdSWeightByReadsNoLowSub, 
+                      Expected=expected_dnds$Omega)
+fullDat <- merge(x=fullDat, y=indelible_dnds[, c("Site", "Scaling_factor")], all.x=TRUE, all.y=FALSE)
+fullDat$Scaling <- as.factor(fullDat$Scaling)
 summary(fullDat)
 head(fullDat)
 
@@ -95,13 +95,14 @@ summary(fullDatMelt)
 head(fullDatMelt)
 
 
-fullDatMelt$Quality <- revalue(fullDatMelt$Quality, c("ActualPerfect"="Without Read Error", "ActualTypical"="With Read Error"))
+fullDatMelt$Quality <- revalue(fullDatMelt$Quality, c("ActualPerfect"="Without Error Read Error", "ActualTypical"="With Read Error"))
 
 summary(fullDatMelt)
 
 fig <- ggplot(fullDatMelt  , aes(x=Expected, y=Actual)) + 
   #geom_point(shape=1, alpha=0.5, size=3) +
   geom_point(alpha=0.3, size=2) +
+  #geom_smooth(aes(color=Scaling), method="lm") + 
   geom_abline(slope=1, color="Red") +   
   #geom_smooth(method=lm, size=1, se=FALSE) +  
   #geom_smooth(size=1) +  
@@ -109,14 +110,13 @@ fig <- ggplot(fullDatMelt  , aes(x=Expected, y=Actual)) +
   #geom_smooth(size=1, fill="cadetblue") +  
   ylab("Inferred Site dN/dS\n") + 
   xlab("\nExpected Site dN/dS") + 
-  #coord_fixed(ratio=1) + 
-  scale_y_continuous(breaks=0:5, limits=c(0, 5)) + 
-  scale_x_continuous(limits=c(0, 3)) + 
+  #coord_fixed(ratio=1) +   
   theme_bw(base_size = 12) + 
   theme(panel.grid.major = element_line(size = .3, color = "lightgray")) + 
-  theme(strip.text.x = element_text(size=rel(1.3)), axis.title=element_text(size=rel(1)), axis.text=element_text(size=rel(1)),
+  theme(strip.text.x = element_text(size=rel(1.3)), 
+        axis.title=element_text(size=rel(1)), 
+        axis.text=element_text(size=rel(1)),
         panel.margin=unit(c(1,1,1,1),"mm"), plot.margin=unit(c(0,0,0,0),"mm")) + 
-  #ggtitle("Inferred Ave dN/dS vs Expected dn/ds") + 
   facet_wrap(~Quality, nrow=1)
 print(fig)
 
@@ -129,16 +129,140 @@ svg(filename="/home/thuy/gitrepo/SlidingWindowAppNote/scatterplot_typical_v_perf
 plot(fig)
 dev.off()
 
-cairo_ps(filename="/home/thuy/gitrepo/SlidingWindowAppNote/scatterplot_typical_v_perfect.eps", width=4, height=2.6)
+cairo_ps(filename="/home/thuy/gitrepo/SlidingWindowAppNote/scatterplot_typical_v_perfect.eps", 
+         width=4, height=2.6,
+         antialias="gray")
 plot(fig)
 dev.off()
 
-fullDatNoNA <- fullDat[!is.na(fullDat$ActualTypical) & !is.na(fullDat$ActualPerfect),]
-dnds_ccc <- epi.ccc(fullDatNoNA$ActualTypical, fullDatNoNA$Expected)
-print(dnds_ccc$rho.c)
 
-dnds_ccc <- epi.ccc(fullDatNoNA$ActualPerfect, fullDatNoNA$Expected)
-print(dnds_ccc$rho.c)
+fullDatMelt$IsLowSub <- as.factor(fullDatMelt$Scaling == 5 | fullDatMelt$Scaling == 10)
+fig <- ggplot(fullDatMelt  , aes(x=Expected, y=Actual, color=IsLowSub)) + 
+  #geom_point(shape=1, alpha=0.5, size=3) +
+  geom_point(alpha=0.3, size=3) +
+  stat_smooth(method="lm", size=3) + 
+  #geom_abline(slope=1, color="Black") +   
+  #geom_smooth(method=lm, size=1, se=FALSE) +  
+  #geom_smooth(size=1) +  
+  #geom_smooth(method="lm", size=1, fill="cadetblue") +  
+  #geom_smooth(size=1, fill="cadetblue") +  
+  scale_y_continuous(breaks=1:5) + 
+  ylab("Inferred Site dN/dS\n") + 
+  xlab("\nExpected Site dN/dS") + 
+  #coord_fixed(ratio=1) +   
+  theme_bw(base_size = 12) + 
+  theme(panel.grid.major = element_line(size = .3, color = "lightgray")) + 
+  theme(strip.text.x = element_text(size=rel(3)), 
+        axis.title=element_text(size=rel(3)), 
+        axis.text=element_text(size=rel(2)),
+        legend.title=element_text(size=rel(3)),
+        legend.text=element_text(size=rel(3)),
+        legend.position=c(0.3, 0.9)) + 
+  #theme(panel.margin=unit(c(1,1,1,1),"mm"), plot.margin=unit(c(0,0,0,0),"mm")) + 
+  #scale_colour_manual(values=c("FALSE"="Blue", "TRUE"="BLACK")) + 
+ scale_colour_discrete(name  ="Substitutions",
+                              breaks=c("FALSE", "TRUE"),
+                              labels=c("> 10", "<= 10")) + 
+  facet_wrap(~Quality, nrow=1)
+print(fig)
+
+
+fig <- ggplot(fullDatMelt[fullDatMelt$Quality=="With Read Error" & 
+                            !is.na(fullDatMelt$Expected) &
+                            fullDatMelt$Expected < 1.5,
+                          ]  , aes(x=Expected, y=Actual, color=IsLowSub)) + 
+  #geom_point(shape=1, alpha=0.5, size=3) +
+  geom_point(alpha=0.5, size=3) +
+  #stat_smooth(method="lm", size=3) + 
+  geom_abline(slope=1, color="Black") + 
+  scale_y_continuous(breaks=1:5) + 
+  ylab("Inferred Site dN/dS\n") + 
+  xlab("\nExpected Site dN/dS") + 
+  #coord_fixed(ratio=1) +   
+  theme_bw(base_size = 12) + 
+  theme(panel.grid.major = element_line(size = .3, color = "lightgray")) + 
+  theme(strip.text.x = element_text(size=rel(3)), 
+        axis.title=element_text(size=rel(3)), 
+        axis.text=element_text(size=rel(2)),
+        legend.title=element_text(size=rel(3)),
+        legend.text=element_text(size=rel(3)),
+        legend.position=c(0.3, 0.9)) + 
+  scale_colour_discrete(name  ="Substitutions",
+                        breaks=c("FALSE", "TRUE"),
+                        labels=c("> 10", "<= 10")) + 
+  facet_wrap(~Quality, nrow=1)
+print(fig)
+
+
+
+fullDatMelt$UpCrap <- fullDatMelt$Expected*exp(1)
+fullDatMelt$LoCrap <- fullDatMelt$Expected/exp(1)
+
+fig <- ggplot(fullDatMelt  , aes(x=Expected, y=Actual, color=IsLowSub)) + 
+  geom_point(alpha=0.3, size=3) +
+  #stat_smooth(method="lm", size=3) + 
+  #geom_abline(slope=1, color="Black") +   
+  geom_abline(slope=exp(1), color="Black") + 
+  geom_abline(slope=exp(-1), color="Black") + 
+  #geom_smooth(method=lm, size=1, se=FALSE) +  
+  #geom_smooth(size=1) +  
+  #geom_smooth(method="lm", size=1, fill="cadetblue") +  
+  #geom_smooth(size=1, fill="cadetblue") +  
+  scale_y_continuous(breaks=1:5) + 
+  ylab("Inferred Site dN/dS\n") + 
+  xlab("\nExpected Site dN/dS") + 
+  #coord_fixed(ratio=1) +   
+  theme_bw(base_size = 12) + 
+  theme(panel.grid.major = element_line(size = .3, color = "lightgray")) + 
+  theme(strip.text.x = element_text(size=rel(3)), 
+        axis.title=element_text(size=rel(3)), 
+        axis.text=element_text(size=rel(2)),
+        legend.title=element_text(size=rel(3)),
+        legend.text=element_text(size=rel(3)),
+        legend.position=c(0.4, 0.9)) + 
+  #theme(panel.margin=unit(c(1,1,1,1),"mm"), plot.margin=unit(c(0,0,0,0),"mm")) + 
+  #scale_colour_manual(values=c("FALSE"="Blue", "TRUE"="BLACK")) + 
+  scale_colour_discrete(name  ="Substitutions",
+                        breaks=c("FALSE", "TRUE"),
+                        labels=c("> 10", "<=10")) + 
+  facet_wrap(~Quality, nrow=1)
+print(fig)
+
+# FOr prezi
+fullDatMelt$Wrong <- FALSE
+fullDatMelt$Wrong <- (fullDatMelt$Actual > 1 & fullDatMelt$Expected < 1) | (fullDatMelt$Actual < 1 & fullDatMelt$Expected > 1)
+fullDatMelt$Wrong <- as.factor(fullDatMelt$Wrong)
+fig <- ggplot(fullDatMelt  , aes(x=Expected, y=Actual, color=Wrong)) + 
+  #geom_point(shape=1, alpha=0.5, size=3) +
+  geom_point(alpha=1, size=3) +
+  #stat_smooth(method="lm", se=FALSE) + 
+  #geom_abline(slope=1, color="Black") +   
+  #geom_smooth(method=lm, size=1, se=FALSE) +  
+  #geom_smooth(size=1) +  
+  #geom_smooth(method="lm", size=1, fill="cadetblue") +  
+  #geom_smooth(size=1, fill="cadetblue") +  
+  scale_y_continuous(breaks=1:5) + 
+  ylab("Inferred Site dN/dS\n") + 
+  xlab("\nExpected Site dN/dS") + 
+  #coord_fixed(ratio=1) +   
+  theme_bw(base_size = 12) + 
+  theme(panel.grid.major = element_line(size = .3, color = "lightgray")) + 
+  theme(strip.text.x = element_text(size=30), 
+        axis.title=element_text(size=30), 
+        axis.text=element_text(size=25),
+        legend.text=element_text(size=14),
+        legend.title=element_text(size=14),
+        legend.position=c(0.4, 0.9)) + 
+  #theme(panel.margin=unit(c(1,1,1,1),"mm"), plot.margin=unit(c(0,0,0,0),"mm")) + 
+  #scale_colour_manual(values=c("FALSE"="Blue", "TRUE"="BLACK")) + 
+  scale_colour_manual(values=c("Green", "Red"),
+    name  ="Diversifying/Purifying Classification",
+                        breaks=c("FALSE", "TRUE"),
+                        labels=c("Correct", "Wrong")) + 
+  facet_wrap(~Quality, nrow=1)
+print(fig)
+
+
 
 dnds_ccc <- epi.ccc(fullDat$ActualTypical, fullDat$Expected)
 print(dnds_ccc$rho.c)
