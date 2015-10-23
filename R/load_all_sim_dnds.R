@@ -4,7 +4,7 @@ library(plyr)
 PSEUDOCOUNT <- 1e-7
 
 get_all_sim_dnds <- function() {
-  DNDS_FILENAME <- "../simulations/out/collate_all.small.csv"
+  DNDS_FILENAME <- "../simulations/out/collate_all.treedist.csv"
   #DNDS_FILENAME <- "../simulations/out/collate_all.csv"
   
   dnds <- read.table(DNDS_FILENAME, header=TRUE, sep=",", na.strings=c("", "None"))
@@ -381,6 +381,9 @@ do_predict_class_diversify <- function() {
   # Make confusion matrix
   confuse <- with(wrongselect_dnds_dat, table(wrongSelect, pred))
   print(confuse)
+  
+  # save env to file
+  save(rfe_class_results, file="rfe_class_results.RData")
   
   # Get accuracy for all of the simulation data predictions  (biased - should use OOB instead)
   accuracy <- sum(wrongselect_dnds_dat$wrongSelect == wrongselect_dnds_dat$pred, na.rm=TRUE)/sum(!is.na(wrongselect_dnds_dat$wrongSelect) & !is.na(wrongselect_dnds_dat$pred))
