@@ -1,15 +1,18 @@
-import umberjack
-import sys, os
+import os
 import subprocess
-import Utility
 import shutil
-import Bio.SeqIO as SeqIO
 import glob
 import re
-import collect_stats
 import logging
+import random
+import sys
+import Bio.SeqIO as SeqIO
+
+from pool import pool_traceback
+import Utility
+import collect_stats
 import config.settings as settings
-import pool_traceback
+
 
 settings.setup_logging()
 
@@ -62,7 +65,7 @@ def do_sliding_window(outdir, output_csv, samfilename, ref_fasta, expected_dnds_
             "--mpi",
             "--mode", "DNDS",
             "--output_csv_filename", output_csv,
-            "--sam_filename", samfilename,
+            "--sam_filename_list", samfilename_list,
             "--ref", REF
     ]
     if MASK_STOP_CODON:
@@ -295,11 +298,17 @@ def gen_sim_data(config_file, indiv, codonsites, cov, scales):
     if os.path.exists(config_file) and os.path.getsize(config_file):
         LOGGER.warn("Not regenerating " + config_file)
     else:
+        seed = random.randint(0, sys.maxint)
+
+
+        readfrag_ave = 87
+        readfrag_std = 125
+        LOGGER.debug("Creating simulation config " + config_file + " with seed " + str(seed))
         with open(config_file, 'w') as fh_out:
             fh_out.write("[sim]\n")
             fh_out.write("FILENAME_PREFIX={}\n".format(filename_prefix))
             fh_out.write("NUM_INDIV={}\n".format(indiv))
-            fh_out.write("SEED=9828384\n")
+            fh_out.write("SEED={}\n".format(seed))
             fh_out.write("NUM_CODON_SITES={}\n".format(codonsites))
             fh_out.write("INDELIBLE_BIN_DIR=../../bin/indelible/indelible_1.03/linux_x64\n")
             fh_out.write("INDELIBLE_SCALING_RATES={}\n".format(",".join([str(x) for x in scales])))
@@ -307,8 +316,8 @@ def gen_sim_data(config_file, indiv, codonsites, cov, scales):
             fh_out.write("ART_QUAL_PROFILE_TSV1 = ../../bin/art/art_3.09.15/Illumina_profiles/EmpMiSeq250R1.txt\n")
             fh_out.write("ART_QUAL_PROFILE_TSV2 = ../../bin/art/art_3.09.15/Illumina_profiles/EmpMiSeq250R2.txt\n")
             fh_out.write("ART_FOLD_COVER={}\n".format(cov))
-            fh_out.write("ART_MEAN_FRAG = 346\n")
-            fh_out.write("ART_STDEV_FRAG = 75\n")
+            fh_out.write("ART_MEAN_FRAG = {}\n".format(260))
+            fh_out.write("ART_STDEV_FRAG = {}\n".format(75))
             fh_out.write("ART_READ_LENGTH = 250\n")
             fh_out.write("ART_INSERT_RATE1 = 0.00045\n")
             fh_out.write("ART_INSERT_RATE2 = 0.00045\n")
@@ -377,28 +386,28 @@ def process_window_size((test_prefix, indiv, window_size)):
                               expected_dnds_filename=EXPECTED_DNDS_FILENAME,
                               indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
                               window_size=window_size, window_depth_cutoff=int(depth), window_breadth_cutoff=breadth)
-            do_collate(outdir=OUT_DIR, output_csv=COLLATE_ACT_DNDS_FILENAME,
-                       ref_fasta=REFERENCE_FASTA,
-                       full_popn_fasta=FULL_POPN_FASTA,
-                       expected_dnds_filename=EXPECTED_DNDS_FILENAME,
-                       indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
-                       full_popn_conserve_csv=FULL_POPN_CONSERVE_CSV,
-                       orig_conserve_csv=ORIG_CONSERVE_CSV, aln_conserve_csv=ALN_CONSERVE_CSV)
+            # do_collate(outdir=OUT_DIR, output_csv=COLLATE_ACT_DNDS_FILENAME,
+            #            ref_fasta=REFERENCE_FASTA,
+            #            full_popn_fasta=FULL_POPN_FASTA,
+            #            expected_dnds_filename=EXPECTED_DNDS_FILENAME,
+            #            indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
+            #            full_popn_conserve_csv=FULL_POPN_CONSERVE_CSV,
+            #            orig_conserve_csv=ORIG_CONSERVE_CSV, aln_conserve_csv=ALN_CONSERVE_CSV)
 
 
-            #errfree reads
-            do_sliding_window(outdir=ERR_FREE_OUT_DIR, output_csv=ERR_FREE_ACTUAL_DNDS_CSV,
-                              samfilename=ERR_FREE_ALN_CONSENSUS_SAM_FILENAME, ref_fasta=REFERENCE_FASTA,
-                              expected_dnds_filename=EXPECTED_DNDS_FILENAME,
-                              indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
-                              window_size=window_size, window_depth_cutoff=int(depth), window_breadth_cutoff=breadth)
-            do_collate(outdir=ERR_FREE_OUT_DIR, output_csv=COLLATE_ACT_ERRFREE_DNDS_FILENAME,
-                       ref_fasta=REFERENCE_FASTA,
-                       full_popn_fasta=FULL_POPN_FASTA,
-                       expected_dnds_filename=EXPECTED_DNDS_FILENAME,
-                       indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
-                       full_popn_conserve_csv=FULL_POPN_CONSERVE_CSV,
-                       orig_conserve_csv=ERR_FREE_ORIG_CONSERVE_CSV, aln_conserve_csv=ERR_FREE_ALN_CONSERVE_CSV)
+            # #errfree reads
+            # do_sliding_window(outdir=ERR_FREE_OUT_DIR, output_csv=ERR_FREE_ACTUAL_DNDS_CSV,
+            #                   samfilename=ERR_FREE_ALN_CONSENSUS_SAM_FILENAME, ref_fasta=REFERENCE_FASTA,
+            #                   expected_dnds_filename=EXPECTED_DNDS_FILENAME,
+            #                   indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
+            #                   window_size=window_size, window_depth_cutoff=int(depth), window_breadth_cutoff=breadth)
+            # do_collate(outdir=ERR_FREE_OUT_DIR, output_csv=COLLATE_ACT_ERRFREE_DNDS_FILENAME,
+            #            ref_fasta=REFERENCE_FASTA,
+            #            full_popn_fasta=FULL_POPN_FASTA,
+            #            expected_dnds_filename=EXPECTED_DNDS_FILENAME,
+            #            indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
+            #            full_popn_conserve_csv=FULL_POPN_CONSERVE_CSV,
+            #            orig_conserve_csv=ERR_FREE_ORIG_CONSERVE_CSV, aln_conserve_csv=ERR_FREE_ALN_CONSERVE_CSV)
 
             LOGGER.debug("Done umberjack and collectdnds for " + OUT_DIR)
 
@@ -408,10 +417,12 @@ if __name__ == "__main__":
 
     pool = pool_traceback.LoggingPool(CONCURRENT_MPIRUN)
     TEST_PREFIX_FORMAT = "small.cov{}.indiv{}.codon{}.scale{}"
-    for cov in [1, 2, 5]:
+    for cov in [0.5, 1, 2]:
         for indiv in [1000, 2000]:
-            for codonsites in [140]:
-                for scales in [[5], [10], [20], [50]]:
+            for codonsites in [3000]:
+                # 90 days to 10 years, average 1 year apart
+
+                for scales in [[1], [5], [10], [1, 5, 10]]:
                     scales_join = "_".join([str(x) for x in scales])
                     test_prefix = TEST_PREFIX_FORMAT.format(cov, indiv, codonsites, scales_join)
                     config_file = SIM_DATA_DIR + os.sep + test_prefix + os.sep + test_prefix + ".config"
@@ -420,9 +431,9 @@ if __name__ == "__main__":
                     gen_sim_data(config_file, indiv, codonsites, cov, scales)
 
 
-                    for result in pool.imap_unordered(process_window_size, [(test_prefix, indiv, 200),
-                                                                            (test_prefix, indiv, 300),
-                                                                            (test_prefix, indiv, 350)]):
-                        pass
+                    # for result in pool.imap_unordered(process_window_size, [(test_prefix, indiv, 200),
+                    #                                                         (test_prefix, indiv, 300),
+                    #                                                         (test_prefix, indiv, 350)]):
+                    #     pass
 
     pool.close()

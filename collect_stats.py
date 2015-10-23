@@ -13,7 +13,9 @@ import logging
 import multiprocessing
 import subprocess
 import Bio.Phylo as Phylo
+from test_topology import TestTopology
 settings.setup_logging()
+import tempfile
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.propagate = 1
@@ -41,6 +43,27 @@ def get_tree_len_depth(treefilename):
                 longest_depth = depth
 
     return unroot_tree_len, longest_depth
+
+def get_tree_dist(window_treefile, full_popn_treefile, window_fasta, win_nuc_range):
+    """
+    finds the distance from expected population tree to actual window tree
+    :param window_treefile:
+    :param full_popn_treefile:
+    :return:
+    """
+
+
+    expected_subsample_treefilename = os.path.basename(full_popn_treefile).replace(".nwk",".resample.missing.{}.nwk".format(win_nuc_range))
+    expected_treefile_tmp = tempfile.NamedTemporaryFile(mode="w+", prefix=expected_subsample_treefilename, dir=os.path.dirname(window_treefile), delete=False)
+    expected_treefile_tmp.close()
+    TestTopology.resample_tree_from_fasta(treefile=full_popn_treefile, out_treefile=expected_treefile_tmp.name, fastafile=window_fasta)
+
+
+    rf_dist = TestTopology.get_rf_dist(expected_treefile_tmp.name, window_treefile)
+
+    os.remove(expected_treefile_tmp.name)
+    return rf_dist
+
 
 
 def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None):
@@ -77,6 +100,7 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
                                                     "Ambig_S", # ambigous base does not change the AA.
                                                     "TreeLen",  # Tree length
                                                     "TreeDepth", # deepest tip to root distance
+                                                    "TreeDist",  # distance from actual to expected tree
                                                     ]
                                 )
         writer.writeheader()
@@ -85,8 +109,11 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
             # *.{start bp}_{end bp}.fasta filenames use 1-based nucleotide position numbering
             slice_fasta_fileprefix = slice_fasta_filename.split('.fasta')[0]
 
+            win_nuc_range = slice_fasta_fileprefix.split('.')[-1]
+
             tree_len = None
             tree_depth = None
+            tree_dist = None
             tree_filename = slice_fasta_filename.replace(".fasta", ".tree")
             if os.path.exists(tree_filename):
                 # NB:  FastTree tree length in nucleotide substitutions / site.  HyPhy converts trees to codon substitution/site to count codon substitutions along phylogeny
@@ -98,7 +125,8 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
                     tree_len, tree_depth = get_tree_len_depth(tree_filename)
 
 
-            win_nuc_range = slice_fasta_fileprefix.split('.')[-1]
+
+
 
 
             # Window ends at this 1-based nucleotide position with respect to the reference
@@ -128,6 +156,10 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
 
             ns, pad, seq_err, err_aa_change, err_aa_nochange, ambig_aa_change, ambig_aa_nochange = error_by_codonpos(slice_fasta_filename, win_start_nuc_pos_1based_wrt_ref, full_popn_fasta)
 
+
+
+
+
             outrow = dict()
             outrow["Window_Start"] = win_start_nuc_pos_1based_wrt_ref
             outrow["Window_End"] = win_end_nuc_pos_1based_wrt_ref
@@ -135,6 +167,15 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
 
             dnds_tsv_filename = slice_fasta_filename.replace(".fasta", ".dnds.tsv")
             if os.path.exists(dnds_tsv_filename):
+                full_popn_treefile = full_popn_fasta.replace(".fasta", ".tree")
+                if not os.path.exists(full_popn_treefile):
+                    full_popn_treefile = full_popn_fasta.replace(".fasta", ".nwk")
+                    if not os.path.exists(full_popn_treefile):
+                        raise ValueError("Can't find full population tree (with .tree or .nwk suffix)" + full_popn_treefile)
+
+                tree_dist = get_tree_dist(window_treefile=tree_filename, full_popn_treefile=full_popn_treefile, window_fasta=slice_fasta_filename,
+                                  win_nuc_range=win_nuc_range)
+
                 with open(dnds_tsv_filename, 'rU') as fh_dnds_tsv:
                     reader = csv.DictReader(fh_dnds_tsv, delimiter='\t')
                     for codonoffset_0based, codon_row in enumerate(reader):    # Every codon site is a row in the *.dnds.tsv file
@@ -163,6 +204,7 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
                         outrow["Ambig_S"] = ambig_aa_nochange[codonoffset_0based]
                         outrow["TreeLen"] = tree_len
                         outrow["TreeDepth"] = tree_depth
+                        outrow["TreeDist"] = tree_dist
                         writer.writerow(outrow)
             else:
                 for codonoffset_0based in range(total_codons):
@@ -262,7 +304,7 @@ def error_by_codonpos(slice_msa_fasta, slice_start_wrt_ref_1based, full_popn_fas
 
 
 
-def make1csv(inferred_dnds_dir, sim_data_dir, output_csv_filename):
+def make1csv(inferred_dnds_dir, sim_data_dir, output_csv_filename, inferred_collate_dnds_csvs):
     """
     Puts all the collate_dnds, full population csv, expected dnds info into 1 csv for checking what causes inaccurate
     inferred dn/ds.
@@ -282,7 +324,7 @@ def make1csv(inferred_dnds_dir, sim_data_dir, output_csv_filename):
                                                     "UnambigCodonRate.Act", # Total unambiguous codon (depth) at the codon site / max read depth for entire slice
                                                     "AADepth.Act",  # Total codons that code for only 1 amino acid at the codon site
                                                     "PopSize.Act",  # Population size
-                                                    #"ConserveTrueBase.Act",
+                                                    "ConserveTrueBase.Act",
                                                     "EntropyTrueBase.Act",  # Average per-base fraction of entropy across the codon site.  Excludes N's and gaps
                                                     "AmbigPadBaseRate.Act",  # Average N or gaps per codon at this site
                                                     "ErrBaseRate.Act",  # Average erroneous bases per codon at this site
@@ -292,7 +334,8 @@ def make1csv(inferred_dnds_dir, sim_data_dir, output_csv_filename):
                                                     "dN_minus_dS.Act",
                                                     "TreeLen.Act",  # length of window tree in nucleotide subs/site
                                                     "TreeDepth.Act",  # depth of longest branch in nucleotide subs/site
-                                                    #"ConserveTrueBase.Exp",
+                                                    "TreeDist.Act", # distance from actual to expected tree in Robinson Foulds
+                                                    "ConserveTrueBase.Exp",
                                                     "EntropyTrueBase.Exp",
                                                     "N.Exp", "S.Exp",
                                                     #"EN.Exp", "ES.Exp",
@@ -300,8 +343,16 @@ def make1csv(inferred_dnds_dir, sim_data_dir, output_csv_filename):
                                                     "dN_minus_dS.Exp"
                                                     ])
         writer.writeheader()
-        for dirpath, dirnames, filenames in  os.walk(inferred_dnds_dir):
-            for filename in fnmatch.filter(filenames, "collate_dnds.csv"):
+        if inferred_collate_dnds_csvs:
+
+            #for dirpath, dirnames, filenames in  os.walk(inferred_dnds_dir):
+            # if dirpath.find("window") < 0:
+            #     continue
+            # for filename in fnmatch.filter(filenames, "collate_dnds.csv"):
+            for inferred_collate_dnds_csv in inferred_collate_dnds_csvs:
+                dirpath = os.path.dirname(inferred_collate_dnds_csv)
+                filename = os.path.basename(inferred_collate_dnds_csv)
+
                 # /home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/small.cov2.indiv3000.codon500/consensus/window200.breadth0.75.depth300.0
                 sim_popn_name = os.path.basename(os.path.abspath(dirpath + os.sep + os.pardir + os.sep + os.pardir))
                 window_traits = os.path.basename(dirpath)
@@ -399,7 +450,7 @@ def make1csv(inferred_dnds_dir, sim_data_dir, output_csv_filename):
                         outrow["UnambigCodonRate.Act"] = float(row["CodonDepth"])/float(row["Reads"])
                         outrow["AADepth.Act"]  = row["AADepth"] if  row.get("AADepth") else None  # TODO: hack since some earlier simulations don't have this value
                         outrow["PopSize.Act"] = total_indiv
-                        #outrow["ConserveTrueBase.Act"] = row["ConserveTrueBase"]
+                        outrow["ConserveTrueBase.Act"] = row["ConserveTrueBase"]
                         outrow["EntropyTrueBase.Act"] = row["EntropyTrueBase"]
                         outrow["AmbigPadBaseRate.Act"] = (int(row["AmbigBase"]) + int(row["Pad"]))/float(row["Reads"])
                         outrow["ErrBaseRate.Act"] = int(row["Err"])/float(row["Reads"])
@@ -415,10 +466,12 @@ def make1csv(inferred_dnds_dir, sim_data_dir, output_csv_filename):
                             outrow["dN_minus_dS.Act"] = row["dN_minus_dS"]
                         outrow["TreeLen.Act"] = row["TreeLen"]
                         outrow["TreeDepth.Act"] = row["TreeDepth"]
+                        outrow["TreeDist.Act"] = row["TreeDist"]
+
 
                         if not codonsite_2_full_cons.get(codonsite):
                             raise ValueError("Missing codon site" + str(codonsite) + " in " + full_popn_conserve_csv)
-                        #outrow["ConserveTrueBase.Exp"] = codonsite_2_full_cons[codonsite].Conservation
+                        outrow["ConserveTrueBase.Exp"] = codonsite_2_full_cons[codonsite].Conservation
                         outrow["EntropyTrueBase.Exp"] = codonsite_2_full_cons[codonsite].Entropy
 
                         if not codonsite_2_full_dnds.get(codonsite):
@@ -457,10 +510,12 @@ def recollect_dnds_all(all_inferred_dnds_dir, sim_data_dir):
     pool = multiprocessing.Pool(PROCS)
     args_itr = []
 
+    i = 0
+    inferred_collate_dnds_csvs = []
     for dirpath, dirnames, filenames in  os.walk(all_inferred_dnds_dir):
         #for filename in fnmatch.filter(filenames, "collate_dnds.csv"):
         for filename in fnmatch.filter(filenames, "actual_dnds_by_site.csv"):
-            #/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/small.cov5.indiv1000.codon500.window350.breadth0.6.depth100.0/consensus/window350/collate_dnds.csv
+            #/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/smTall.cov5.indiv1000.codon500.window350.breadth0.6.depth100.0/consensus/window350/collate_dnds.csv
             sim_name = os.path.basename(os.path.abspath(dirpath + os.sep + os.pardir + os.sep + os.pardir))
 
 
@@ -472,22 +527,33 @@ def recollect_dnds_all(all_inferred_dnds_dir, sim_data_dir):
             LOGGER.debug("Recollating Inferred collated dnds=" + inferred_collate_dnds_csv)
             LOGGER.debug("Recollating Sim Full Popn Fasta = " + full_popn_fasta)
 
+            # # TODO:  remove me
+            # if dirpath.find("/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/small.cov5.indiv1000.codon140.scale50/consensus/window200.breadth0.9.depth10.0.errFree") < 0:
+            #     continue
             args_itr.append(dict(output_dir=dirpath, output_csv_filename=inferred_collate_dnds_csv, full_popn_fasta=full_popn_fasta))
+            inferred_collate_dnds_csvs.extend([inferred_collate_dnds_csv])
+            if i >= 10:
+                break
 
+            i += 1
+
+        if i >= 10:
+            break
 
 
     for result in pool.imap_unordered(collect_dnds_helper, args_itr, 1):
         pass
 
     pool.terminate()
+    return inferred_collate_dnds_csvs
 
 
 if __name__ == "__main__":
     SIM_OUT_DIR = os.path.dirname(os.path.realpath(__file__)) + "/simulations/out"
     SIM_DATA_DIR = os.path.dirname(os.path.realpath(__file__)) + "/simulations/data"
-    OUTPUT_INF_EXP_COLLATE_CSV = SIM_OUT_DIR + os.sep + "collate_all.csv"
-    #recollect_dnds_all(all_inferred_dnds_dir=SIM_OUT_DIR, sim_data_dir=SIM_DATA_DIR)
-    make1csv(inferred_dnds_dir=SIM_OUT_DIR, sim_data_dir=SIM_DATA_DIR, output_csv_filename=OUTPUT_INF_EXP_COLLATE_CSV)
+    OUTPUT_INF_EXP_COLLATE_CSV = SIM_OUT_DIR + os.sep + "collate_all.treedist.csv"
+    inferred_collate_dnds_csvs = recollect_dnds_all(all_inferred_dnds_dir=SIM_OUT_DIR, sim_data_dir=SIM_DATA_DIR)
+    make1csv(inferred_dnds_dir=SIM_OUT_DIR, sim_data_dir=SIM_DATA_DIR, output_csv_filename=OUTPUT_INF_EXP_COLLATE_CSV, inferred_collate_dnds_csvs=inferred_collate_dnds_csvs)
 
     # LOGGER.debug("About to generate rhtml")
     # Rscript_wdir =  os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep + "R")
