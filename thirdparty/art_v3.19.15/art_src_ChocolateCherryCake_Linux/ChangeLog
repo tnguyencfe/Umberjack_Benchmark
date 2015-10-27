@@ -1,0 +1,11 @@
+The list of changes for Chocolate Cherries release are given below. 
+
+art_illumina version 2.3.7
+	1) corrected a typo of "SO" in the HQ tag of the SAM file generated   
+	2) added an option to use 'M' instead of '=/X' for alignment match/mismatch CIGAR in the SAM file generated
+art_454 version 2.6.0
+	1) corrected a typo of "SO" in the HQ tag of the SAM file generated   
+	2) added an option to use 'M' instead of '=/X' for alignment match/mismatch CIGAR in the SAM file generated
+art_SOLiD version 1.3.3
+	1) corrected a typo of "SO" in the HQ tag of the SAM file generated   
+	2) added an option to use 'M' instead of '=/X' for alignment match/mismatch CIGAR in the SAM file generated

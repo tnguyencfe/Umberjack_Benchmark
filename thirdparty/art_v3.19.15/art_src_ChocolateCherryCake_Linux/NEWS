@@ -1,0 +1,2 @@
+1) corrected a typo of "SO" in the HQ tag of the SAM file generated   
+2) added an option to use 'M' instead of '=/X' for alignment match/mismatch CIGAR in the SAM file generated
