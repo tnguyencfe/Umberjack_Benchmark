@@ -151,7 +151,7 @@ public:
         a_read.seq_ref=ref_seq_cmp.substr(pos, read_len-slen);
       }
       a_read.bpos=pos;
-      a_read.ref2read();
+      a_read.real2read(read_len);
       return true;
     };
 
@@ -192,10 +192,10 @@ public:
       }
       read_1.is_plus_strand=is_plus_strand;
       read_1.bpos=pos_1;
-      read_1.ref2read();
+      read_1.real2read(read_len);
       read_2.is_plus_strand=is_plus_strand;
       read_2.bpos=pos_2;
-      read_2.ref2read();
+      read_2.real2read(read_len);
       //cout<<pos_1<<" a: "<<read_1.seq_read<<endl<<pos_2<<" b: "<<read_2.seq_read<<endl;
       return true;
     };

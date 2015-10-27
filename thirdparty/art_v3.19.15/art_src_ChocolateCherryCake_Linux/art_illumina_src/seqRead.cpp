@@ -49,6 +49,50 @@ int seqRead::get_indel(int read_len){
     return (ins_len-del_len);
 };
 
+/**
+ * Gets the read from a realistic fragment cut from the reference with adapter and random base contamination.
+ * seq_real contains reference sequence as well as any adapter and random base contamination
+ */
+void seqRead::real2read(int read_len){
+    if(indel.size()==0){
+        seq_read=seq_real.substr(0, read_len);
+        return;
+    }
+    seq_read.clear();
+    size_t i=0;
+    int k;
+    for(k=0; k<read_len; k++){
+        //cout<<i<<"\t"<<k<<endl;
+        if(indel.count(k)==0){
+            seq_read.push_back(seq_real[i]); i++;
+        }
+        else if(indel[k]=='-'){
+            i++; read_len++;
+        }
+        else{
+            seq_read.push_back(indel[k]);
+        }
+    }
+}
+
+/**
+ * Gets the length of the sequenced reference adjusted for indels with respect to the reference
+ */
+int seqRead::getAdjustedSeqRefLen() {
+	int adjust_seq_ref_len = seq_ref.size();
+	for(size_t i=0; i<seq_ref.size(); i++){
+		if (indel.count(i) > 0) {
+			if (indel[i] == '-') {
+				adjust_seq_ref_len--;
+			}
+			else {
+				adjust_seq_ref_len += indel.count(i);
+			}
+		}
+	}
+	return adjust_seq_ref_len;
+}
+
 void seqRead::ref2read(){
     if(indel.size()==0){
         seq_read=seq_ref;
@@ -59,7 +103,7 @@ void seqRead::ref2read(){
     for(size_t i=0; i<seq_ref.size();){
         //cout<<i<<"\t"<<k<<endl;
         if(indel.count(k)==0){
-            seq_read.push_back(seq_ref[i]); i++; k++; 
+            seq_read.push_back(seq_ref[i]); i++; k++;
         }
         else if(indel[k]=='-'){
             i++;k++;
@@ -73,4 +117,3 @@ void seqRead::ref2read(){
         k++;
     }
 }
-

@@ -250,7 +250,12 @@ CPP = gcc -E
 CPPFLAGS = 
 CXX = g++
 CXXDEPMODE = depmode=gcc3
-CXXFLAGS = -g -O2
+ifndef $(DEBUG)
+	CXXFLAGS = -g -O0
+else
+	CXXFLAGS = -g -O2
+endif
+
 CYGPATH_W = echo
 DEFS = -DHAVE_CONFIG_H
 DEPDIR = .deps

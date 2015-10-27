@@ -32,7 +32,7 @@ bool art::next_read_indel(seqRead& a_read){
         a_read.seq_ref=ref_seq_cmp.substr(pos, read_len-slen);
     }
     a_read.bpos=pos;
-    a_read.ref2read();
+    a_read.real2read(read_len);
     return true;
 }
 
@@ -78,30 +78,19 @@ bool art::next_pair_read_indel(seqRead& read_1, seqRead& read_2){
     }
     read_1.is_plus_strand=is_plus_strand;
     read_1.bpos=pos_1;
-    read_1.ref2read();
+    read_1.real2read(read_len);
     read_2.is_plus_strand=is_plus_strand;
     read_2.bpos=pos_2;
-    read_2.ref2read();
+    read_2.real2read(read_len);
     return true;
 }
 
 //matepair-end read: the second read is reverse complemenaty strand 
 bool art::next_pair_read_indel_mate(seqRead& read_1, seqRead& read_2){
-    if(read_len>ref_seq.length()){
-	    return false; //ref_seq is too short.
+    int fragment_len=gaussain_mean+ (int)floor(gsl_ran_gaussian(gsl_R, gaussain_sigma));
+    while (fragment_len<read_len || fragment_len>ref_seq.length()){
+        fragment_len=gaussain_mean+ (int)floor(gsl_ran_gaussian(gsl_R, gaussain_sigma));
     }
-    int fragment_len=1;
-    if(gaussain_mean-2*gaussain_sigma>ref_seq.length()){
-	    //when reference length < mean-2*std, fragment_len sets to be reference length
-	   fragment_len=ref_seq.length();
-    }
-    else{
-	    fragment_len=gaussain_mean+ (int)floor(gsl_ran_gaussian(gsl_R, gaussain_sigma));
-	    while (fragment_len<read_len || fragment_len>ref_seq.length()){
-		    fragment_len=gaussain_mean+ (int)floor(gsl_ran_gaussian(gsl_R, gaussain_sigma));
-	    }
-    }
-
     long pos_1=(long) floor((ref_seq.length()-fragment_len)*r_prob())+fragment_len-read_len;
     long pos_2=ref_seq.length()-(pos_1+2*read_len-fragment_len);
     int slen_1 =read_1.get_indel(read_len);
@@ -123,31 +112,22 @@ bool art::next_pair_read_indel_mate(seqRead& read_1, seqRead& read_2){
         read_2.seq_ref=ref_seq.substr(pos_2, read_len-slen_2);
     }
     read_1.bpos=pos_1;
-    read_1.ref2read();
+    read_1.real2read(read_len);
     read_2.bpos=pos_2;
-    read_2.ref2read();
+    read_2.real2read(read_len);
     return true;
 }
 
 
 //paired-end read: the second read is reverse complemenaty strand 
 bool art::next_pair_read_indel_cmp(seqRead& read_1, seqRead& read_2){
-    if(read_len>ref_seq.length()){
-	    return false; //ref_seq is too short.
-    }
-    int fragment_len=1;
-    if(gaussain_mean-2*gaussain_sigma>ref_seq.length()){
-	    //when reference length < mean-2*std, fragment_len sets to be reference length
-	   fragment_len=ref_seq.length();
-    }
-    else{
-	    fragment_len=gaussain_mean+ (int)floor(gsl_ran_gaussian(gsl_R, gaussain_sigma));
-	    while (fragment_len<read_len || fragment_len>ref_seq.length()){
-		    fragment_len=gaussain_mean+ (int)floor(gsl_ran_gaussian(gsl_R, gaussain_sigma));
-	    }
+    static const char * adapter = "AGATCGGAAGAGCACACGTCTGAACTCCAGTCACACAGTGATCTCGTATGCCGTCTTCTGCTTG";
+    static const char * adapter2 = "AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGTAGATCTCGGTGGTCGCCGTATCATT";
+    int fragment_len=gaussain_mean+ (int)floor(gsl_ran_gaussian(gsl_R, gaussain_sigma));
+    while (fragment_len<0 || fragment_len>ref_seq.length()){
+        fragment_len=gaussain_mean+ (int)floor(gsl_ran_gaussian(gsl_R, gaussain_sigma));
     }
     long pos_1=(long) floor((ref_seq.length()-fragment_len)*r_prob());
-    //long pos_2=pos_1+fragment_len-read_len;
     long pos_2=ref_seq.length()-pos_1-fragment_len;
     int slen_1 =read_1.get_indel(read_len);
     int slen_2 =read_2.get_indel(read_len);   
@@ -157,22 +137,35 @@ bool art::next_pair_read_indel_cmp(seqRead& read_1, seqRead& read_2){
     }
     if(is_plus_strand){
         read_1.is_plus_strand=true;
-        read_1.seq_ref=ref_seq.substr(pos_1, read_len-slen_1); 
+        read_1.seq_real = ref_seq.substr(pos_1, fragment_len);
         read_2.is_plus_strand=false;
 //      pos_2=ref_seq.length()-pos_2-read_len;
-        read_2.seq_ref=ref_seq_cmp.substr(pos_2, read_len-slen_2);
+        read_2.seq_real = ref_seq_cmp.substr(pos_2, fragment_len);
+
     }
     else{
         read_1.is_plus_strand=false;
-        read_1.seq_ref=ref_seq_cmp.substr(pos_1, read_len-slen_1);
+        read_1.seq_real = ref_seq_cmp.substr(pos_1, fragment_len);
 //      pos_2=ref_seq.length()-pos_2-read_len;
         read_2.is_plus_strand=true;
-        read_2.seq_ref=ref_seq.substr(pos_2, read_len-slen_2);
+        read_2.seq_real = ref_seq.substr(pos_2, fragment_len);
+
     }
+    read_1.seq_real.append(string(adapter));
+    read_2.seq_real.append(string(adapter2));
+    while(read_1.seq_real.length() < read_len) read_1.seq_real.append(string("AAAAAAAAAAAAAAAAAAAA"));
+    while(read_2.seq_real.length() < read_len) read_2.seq_real.append(string("AAAAAAAAAAAAAAAAAAAA"));
+
+
+    int ref_len1 = (fragment_len < (read_len-slen_1)) ? fragment_len : (read_len-slen_1);
+    int ref_len2 = (fragment_len < (read_len-slen_2)) ? fragment_len : (read_len-slen_2);
+    read_1.seq_ref = read_1.seq_real.substr(0, ref_len1);
+    read_2.seq_ref = read_2.seq_real.substr(0, ref_len2);
+
     read_1.bpos=pos_1;
-    read_1.ref2read();
+    read_1.real2read(read_len);
     read_2.bpos=pos_2;
-    read_2.ref2read();
+    read_2.real2read(read_len);
     //cout<<pos_1<<" a: "<<read_1.seq_read<<endl<<pos_2<<" b: "<<read_2.seq_read<<endl;
     return true;
 }

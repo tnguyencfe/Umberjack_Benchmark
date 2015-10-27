@@ -89,17 +89,21 @@ public:
 
     //static bool with_indel;
     int get_indel(int read_len);
+    int getAdjustedSeqRefLen();
+
     map<int,char,less<int> > indel;
     map<int,char> substitution;
     bool is_plus_strand;
     unsigned long bpos; //parent
     string seq_read;
     string seq_ref;
+    string seq_real;
     void clear(){
         indel.clear();
         substitution.clear();
         seq_read.clear();
         seq_ref.clear();
+        seq_real.clear();
     }
     //string aln_read;
     //string aln_ref;
@@ -109,9 +113,11 @@ public:
         aln_read=seq_read; aln_ref=seq_ref;
         for(it=indel.begin(); it!=indel.end(); it++){
             if(it->second!='-'){
+                if(it->first > aln_ref.length())break;
                 aln_ref.insert(it->first,1,'-');
             }
             else{
+                if(it->first > aln_read.length())break;
                 aln_read.insert(it->first,1,'-');
             }
         }
@@ -119,6 +125,7 @@ public:
     };
 
     void ref2read();
+    void real2read(int read_len);
     
     //based on based on calibrated position-depended error rates
     int add_calib_error_1st(){
