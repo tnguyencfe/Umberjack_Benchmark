@@ -3,10 +3,10 @@ import subprocess
 import os
 import logging
 import sys
-import ConfigParser
 import config.settings as settings
 import random
-import seq_err_rate
+import fnmatch
+
 
 LOGGER = logging.getLogger(__name__)
 settings.setup_logging()
@@ -158,14 +158,20 @@ def cmp_err_rates(outcsv, sams):
     :return:
     """
     cmd = ["python", CWD + "/seq_err_rate.py",
-                          outcsv,
-                          str(len(sams)), # number of processors
-                          ",".join(sams)]
+           outcsv,
+           str(min(9, len(sams))), # number of processors
+           ",".join(sams)]
     LOGGER.debug("About to execute " + " ".join(cmd))
     subprocess.check_call(cmd)
 
 
 if __name__ == "__main__":
+    is_skip_read_gen = False
+    if len(sys.argv) > 1 and sys.argv[1] == "-s":
+        print "Skipping art read generation"
+        is_skip_read_gen = True
+
+
     popn_fasta = create_population_fasta()
 
     profile_sams = []
@@ -177,78 +183,83 @@ if __name__ == "__main__":
 
     reads_dir = os.path.dirname(popn_fasta) +"/reads"
 
+    if not is_skip_read_gen:
 
-    for i in range(0, TRIALS):
-        seed = random.randint(0, sys.maxint)
+        for i in range(0, TRIALS):
+            seed = random.randint(0, sys.maxint)
 
-        for args in [dict(profname="longshot",
-                             profile_tsv1=CWD + "/art_profiles/longshot_ART_profile.R1.txt",
-                             profile_tsv2=CWD + "/art_profiles/longshot_ART_profile.R2.txt",
-                             quality_shift = 0,
-                             fold_cover = 9,
-                             frag_mean = 136,
-                             frag_std = 94),
-                    dict(profname="longshot",
-                             profile_tsv1=CWD + "/art_profiles/longshot_ART_profile.R1.txt",
-                             profile_tsv2=CWD + "/art_profiles/longshot_ART_profile.R2.txt",
-                             quality_shift = -2,
-                             fold_cover = 9,
-                             frag_mean = 136,
-                             frag_std = 94),
-            dict(profname="longshot",
-                             profile_tsv1=CWD + "/art_profiles/longshot_ART_profile.R1.txt",
-                             profile_tsv2=CWD + "/art_profiles/longshot_ART_profile.R2.txt",
-                             quality_shift = -3,
-                             fold_cover = 9,
-                             frag_mean = 136,
-                             frag_std = 94),
+            for args in [dict(profname="longshot",
+                                 profile_tsv1=CWD + "/art_profiles/longshot_ART_profile.R1.txt",
+                                 profile_tsv2=CWD + "/art_profiles/longshot_ART_profile.R2.txt",
+                                 quality_shift = 0,
+                                 fold_cover = 9,
+                                 frag_mean = 136,
+                                 frag_std = 94),
                         dict(profname="longshot",
-                             profile_tsv1=CWD + "/art_profiles/longshot_ART_profile.R1.txt",
-                             profile_tsv2=CWD + "/art_profiles/longshot_ART_profile.R2.txt",
-                             quality_shift = 0,
-                             fold_cover = 6,
-                             frag_mean = 300,
-                             frag_std = 50),
-                        dict(profname="default",
-                             profile_tsv1 = CWD + "/simulations/bin/art/art_3.11.14/Illumina_profiles/EmpMiSeq250R1.txt",
-                             profile_tsv2 = CWD + "/simulations/bin/art/art_3.11.14/Illumina_profiles/EmpMiSeq250R2.txt",
-                             quality_shift = 0,
-                             fold_cover = 6,
-                             frag_mean = 300,
-                             frag_std = 50),
-                        dict(profname="default",
-                             profile_tsv1 = CWD + "/simulations/bin/art/art_3.11.14/Illumina_profiles/EmpMiSeq250R1.txt",
-                             profile_tsv2 = CWD + "/simulations/bin/art/art_3.11.14/Illumina_profiles/EmpMiSeq250R2.txt",
-                             quality_shift = 0,
-                             fold_cover = 9,
-                             frag_mean = 136,
-                             frag_std = 94)]:
+                                 profile_tsv1=CWD + "/art_profiles/longshot_ART_profile.R1.txt",
+                                 profile_tsv2=CWD + "/art_profiles/longshot_ART_profile.R2.txt",
+                                 quality_shift = -2,
+                                 fold_cover = 9,
+                                 frag_mean = 136,
+                                 frag_std = 94),
+                dict(profname="longshot",
+                                 profile_tsv1=CWD + "/art_profiles/longshot_ART_profile.R1.txt",
+                                 profile_tsv2=CWD + "/art_profiles/longshot_ART_profile.R2.txt",
+                                 quality_shift = -3,
+                                 fold_cover = 9,
+                                 frag_mean = 136,
+                                 frag_std = 94),
+                            dict(profname="longshot",
+                                 profile_tsv1=CWD + "/art_profiles/longshot_ART_profile.R1.txt",
+                                 profile_tsv2=CWD + "/art_profiles/longshot_ART_profile.R2.txt",
+                                 quality_shift = 0,
+                                 fold_cover = 6,
+                                 frag_mean = 300,
+                                 frag_std = 50),
+                            dict(profname="default",
+                                 profile_tsv1 = CWD + "/simulations/bin/art/art_3.11.14/Illumina_profiles/EmpMiSeq250R1.txt",
+                                 profile_tsv2 = CWD + "/simulations/bin/art/art_3.11.14/Illumina_profiles/EmpMiSeq250R2.txt",
+                                 quality_shift = 0,
+                                 fold_cover = 6,
+                                 frag_mean = 300,
+                                 frag_std = 50),
+                            dict(profname="default",
+                                 profile_tsv1 = CWD + "/simulations/bin/art/art_3.11.14/Illumina_profiles/EmpMiSeq250R1.txt",
+                                 profile_tsv2 = CWD + "/simulations/bin/art/art_3.11.14/Illumina_profiles/EmpMiSeq250R2.txt",
+                                 quality_shift = 0,
+                                 fold_cover = 9,
+                                 frag_mean = 136,
+                                 frag_std = 94)]:
 
 
-            profname = args["profname"]
-            profile_tsv1 = args["profile_tsv1"]
-            profile_tsv2 = args["profile_tsv2"]
-            quality_shift = args["quality_shift"]
-            fold_cover = args["fold_cover"]
-            frag_mean = args["frag_mean"]
-            frag_std = args["frag_std"]
+                profname = args["profname"]
+                profile_tsv1 = args["profile_tsv1"]
+                profile_tsv2 = args["profile_tsv2"]
+                quality_shift = args["quality_shift"]
+                fold_cover = args["fold_cover"]
+                frag_mean = args["frag_mean"]
+                frag_std = args["frag_std"]
 
-            profile_read_dir =  reads_dir + os.sep + profname
-            if not os.path.exists(profile_read_dir):
-                os.makedirs(profile_read_dir)
+                profile_read_dir =  reads_dir + os.sep + profname
+                if not os.path.exists(profile_read_dir):
+                    os.makedirs(profile_read_dir)
 
-            art_filename_prefix =  "{}_indel{}_qs{}_cover{}_fragmean{}_fragstd{}_seed{}".format(profname, INDEL_RATE, quality_shift,
-                                                                                                fold_cover, frag_mean, frag_std, seed)
-            art_output_prefix = profile_read_dir + os.sep + art_filename_prefix
-            create_art_reads(art_exe=ADAPTER_ENABLED_ART_EXE,
-                             ref_fasta=popn_fasta,
-                             profile_tsv1=profile_tsv1, profile_tsv2=profile_tsv2,
-                             ir=INDEL_RATE, ir2=INDEL_RATE, dr=INDEL_RATE, dr2=INDEL_RATE, qs=quality_shift, qs2=quality_shift,
-                             fold_cover=fold_cover,
-                             frag_mean=frag_mean, frag_std=frag_std, output_prefix=art_output_prefix, seed=seed)
+                art_filename_prefix =  "{}_indel{}_qs{}_cover{}_fragmean{}_fragstd{}_seed{}".format(profname, INDEL_RATE, quality_shift,
+                                                                                                    fold_cover, frag_mean, frag_std, seed)
+                art_output_prefix = profile_read_dir + os.sep + art_filename_prefix
+                create_art_reads(art_exe=ADAPTER_ENABLED_ART_EXE,
+                                 ref_fasta=popn_fasta,
+                                 profile_tsv1=profile_tsv1, profile_tsv2=profile_tsv2,
+                                 ir=INDEL_RATE, ir2=INDEL_RATE, dr=INDEL_RATE, dr2=INDEL_RATE, qs=quality_shift, qs2=quality_shift,
+                                 fold_cover=fold_cover,
+                                 frag_mean=frag_mean, frag_std=frag_std, output_prefix=art_output_prefix, seed=seed)
 
-            profile_sams.extend([art_output_prefix + ".sam"])
 
+    for dirpath, dirname, filenames in os.walk(reads_dir):
+        for sam in fnmatch.filter(filenames, "*.sam"):
+            if sam.find("errFree") >= 0:
+                continue
+            profile_sams.extend([dirpath + os.sep + sam])
 
 
     cmp_err_rates(outcsv=CWD + "/simulations/data/benchmark_art_profile/seq_error_rate.csv", sams=profile_sams)
