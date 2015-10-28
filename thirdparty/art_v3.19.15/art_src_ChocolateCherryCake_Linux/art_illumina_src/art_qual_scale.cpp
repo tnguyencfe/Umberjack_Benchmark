@@ -124,7 +124,7 @@ bool art::next_pair_read_indel_cmp(seqRead& read_1, seqRead& read_2){
     static const char * adapter = "AGATCGGAAGAGCACACGTCTGAACTCCAGTCACACAGTGATCTCGTATGCCGTCTTCTGCTTG";
     static const char * adapter2 = "AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGTAGATCTCGGTGGTCGCCGTATCATT";
     int fragment_len=gaussain_mean+ (int)floor(gsl_ran_gaussian(gsl_R, gaussain_sigma));
-    while (fragment_len<0 || fragment_len>ref_seq.length()){
+    while (fragment_len<=0 || fragment_len>ref_seq.length()){
         fragment_len=gaussain_mean+ (int)floor(gsl_ran_gaussian(gsl_R, gaussain_sigma));
     }
     long pos_1=(long) floor((ref_seq.length()-fragment_len)*r_prob());
