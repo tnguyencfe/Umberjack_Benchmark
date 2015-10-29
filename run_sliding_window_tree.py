@@ -682,6 +682,8 @@ if __name__ == "__main__":
     # Let umberjack do the mpi distribution.  Just give it a list of samfiles
     # For each umberjack mpi run, we need to cluster the simulations with the same wnidow breadth and window depth,
     # since each umberjack run allows only 1 breadth & wdepth thresholds, but allows for multiple samfiles.
+    thepool =  pool_traceback.LoggingPool(processes=8)
     for umbjerack_group, group_sim_args in umberjack_group_to_args.iteritems():
         for result in thepool.imap_unordered(process_window_size_helper, group_sim_args):
             pass
+    thepool.close()
