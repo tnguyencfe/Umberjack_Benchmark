@@ -61,13 +61,13 @@ void seqRead::real2read(int read_len){
     seq_read.clear();
     size_t i=0;
     int k;
-    for(k=0; k<read_len; k++){
+    for(k=0; seq_read.length() < read_len; k++){
         //cout<<i<<"\t"<<k<<endl;
         if(indel.count(k)==0){
             seq_read.push_back(seq_real[i]); i++;
         }
         else if(indel[k]=='-'){
-            i++; read_len++;
+            i++;
         }
         else{
             seq_read.push_back(indel[k]);

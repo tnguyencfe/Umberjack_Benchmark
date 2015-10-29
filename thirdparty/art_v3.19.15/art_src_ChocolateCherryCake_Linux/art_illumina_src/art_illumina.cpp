@@ -779,9 +779,11 @@ int main(int argc, char* argv[]){
 					sR2.printRead(SAMFILE);
 					if(err_free_sam){
 						sR.seq=a_read.seq_ref;
+						sR.qual.resize(sR.seq.size());
 						for(size_t k=0; k<sR.qual.size(); k++) sR.qual[k]=max_q_c;
-						sR2.seq=a_read_2.seq_ref;
 
+						sR2.seq=a_read_2.seq_ref;
+						sR2.qual.resize(sR2.seq.size());
 						for(size_t k=0; k<sR2.qual.size(); k++) sR2.qual[k]=max_q_c;
 						if(a_read.is_plus_strand) {
 							if (a_read.seq_ref.size() < read_len) {  // fragment shorter than read length?
@@ -827,9 +829,13 @@ int main(int argc, char* argv[]){
 						//get new error free reads when the original reads having indels
 						if (sR.seq.length()!=a_read.seq_ref.size()){
 							sR.seq=a_art.ref_seq.substr(sR.pos-1, a_read.seq_ref.size());
+							sR.qual.resize(sR.seq.size());
+							for(size_t k=0; k<sR.qual.size(); k++) sR.qual[k]=max_q_c;
 						}
 						if (sR2.seq.length()!=a_read_2.seq_ref.size()){
 							sR2.seq=a_art.ref_seq.substr(sR2.pos-1, a_read_2.seq_ref.size());
+							sR2.qual.resize(sR2.seq.size());
+							for(size_t k=0; k<sR2.qual.size(); k++) sR2.qual[k]=max_q_c;
 						}
 
 						sR.printRead(SAMFILE_EF);

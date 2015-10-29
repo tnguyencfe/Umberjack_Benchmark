@@ -58,15 +58,7 @@ void samRead::getCigar(string & aln_ref, string& aln_read, bool use_M){
 	int k=0;
 	if(flag & 0x10){ //reverse complement SEQ 
 		int ins_len=0, del_len=0;
-		// The aligned reference will be shorter than the aligned read
-		// if the aligned read has adapter or base contamination because the fragment was shorter than the read.
-		// The contamination will happen on the 3' end of the read.
-		if (aln_ref.length()  < aln_read.length()) {
-			int soft_clip_len = aln_read.length() - aln_ref.length();
-			ostringstream oss;
-			oss << soft_clip_len << 'S';
-			cigar.append(oss.str());
-		}
+
 		for(int i=aln_ref.length()-1; i>=0; i--){
 			if(aln_ref[i]==aln_read[i]){
 				t='=';
@@ -95,6 +87,17 @@ void samRead::getCigar(string & aln_ref, string& aln_read, bool use_M){
 			k++; t2=t;
 		}
 		pos-=del_len-ins_len; //adjust start position
+
+		// The aligned reference will be shorter than the aligned read
+		// if the aligned read has adapter or base contamination because the fragment was shorter than the read.
+		// The contamination will happen on the 3' end of the read.
+		// We also have to take account inserts wrt ref in the read when tacking on softclips
+		if (aln_ref.length()  < aln_read.length()) {
+			int soft_clip_len = aln_read.length() - aln_ref.length() -  ins_len;
+			ostringstream oss;
+			oss << soft_clip_len << 'S';
+			cigar = oss.str() + cigar;
+		}
 	}
 	else{ 
 		for(int i=0; i<aln_ref.length(); i++){
