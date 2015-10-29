@@ -7,11 +7,15 @@ import logging
 import random
 import sys
 import Bio.SeqIO as SeqIO
-
+import Bio.Phylo as Phylo
+import csv
 from pool import pool_traceback
 import Utility
 import collect_stats
 import config.settings as settings
+import sam.sam_handler
+from test_topology import TestTopology
+import tempfile
 
 
 settings.setup_logging()
@@ -19,6 +23,8 @@ settings.setup_logging()
 LOGGER = logging.getLogger(__name__)
 LOGGER.propagate = 1
 
+
+SIM_ARGS_TSV = "./sim_config/sim_args.tsv"  # a csv that specifies which simulations to run
 
 SIM_DATA_DIR =  os.path.dirname(os.path.realpath(__file__)) + os.sep + "simulations/data"
 SIM_OUT_DIR =   os.path.dirname(os.path.realpath(__file__)) + os.sep +"simulations/out"
@@ -43,9 +49,12 @@ KEEP_INSERTS = False
 
 REF = "consensus"
 
-def do_sliding_window(outdir, output_csv, samfilename, ref_fasta, expected_dnds_filename, indelible_dnds_filename,
-                      window_size, window_depth_cutoff, window_breadth_cutoff):
-    ref_len = Utility.get_seq2len(ref_fasta)[REF]
+# def do_sliding_window(outdir, output_csv, samfilename_list, expected_dnds_filename, indelible_dnds_filename,
+#                       window_size, window_depth_cutoff, window_breadth_cutoff, min_qual):
+def do_sliding_window(outdir, output_csv, samfilename_list,
+                      window_size, window_depth_cutoff, window_breadth_cutoff, min_qual):
+    # ref_len = Utility.get_seq2len(ref_fasta)[REF]
+
 
     call = ["mpirun",
             "--machinefile", SIM_OUT_DIR + os.sep + "machine_window" + str(window_size) + ".txt",
@@ -54,19 +63,17 @@ def do_sliding_window(outdir, output_csv, samfilename, ref_fasta, expected_dnds_
             os.path.dirname(os.path.realpath(__file__)) + os.sep + "../SlidingWindow/umberjack.py",
             "--out_dir", outdir,
             "--map_qual_cutoff", str(MAPQ_CUTOFF),
-            "--read_qual_cutoff", str(READ_QUAL_CUTOFF),
+            "--read_qual_cutoff", str(min_qual),
             "--max_prop_n", str(MAX_PROP_N),
             "--window_size", str(window_size),
             "--window_slide", str(WINDOW_SLIDE),
             "--window_breadth_cutoff", str(window_breadth_cutoff),
             "--window_depth_cutoff", str(window_depth_cutoff),
-            "--start_nucpos", str(START_NUCPOS),
             "--threads_per_window", str(THREADS_PER_WINDOW),
             "--mpi",
             "--mode", "DNDS",
             "--output_csv_filename", output_csv,
-            "--sam_filename_list", samfilename_list,
-            "--ref", REF
+            "--sam_filename_list", samfilename_list
     ]
     if MASK_STOP_CODON:
         call = call + ["--mask_stop_codon"]
@@ -75,6 +82,7 @@ def do_sliding_window(outdir, output_csv, samfilename, ref_fasta, expected_dnds_
     if KEEP_INSERTS:
         call = call + ["--insert"]
 
+
     LOGGER.debug("About to execute cmd:" + " ".join(call))
     try:
         subprocess.check_call(call, shell=False, env=os.environ)
@@ -82,41 +90,23 @@ def do_sliding_window(outdir, output_csv, samfilename, ref_fasta, expected_dnds_
         LOGGER.error("Failure in " + " ".join(call) + "\n" + e.message)
         LOGGER.exception(e.message)
 
-    # umberjack.eval_windows_async(ref=REF, sam_filename=samfilename,
-    #                                                        out_dir=outdir,
-    #                                                        map_qual_cutoff=MAPQ_CUTOFF,
-    #                                                        read_qual_cutoff=READ_QUAL_CUTOFF,
-    #                                                        max_prop_n=MAX_PROP_N,
-    #                                                        start_nucpos=START_NUCPOS,
-    #                                                        end_nucpos=ref_len,
-    #                                                        window_size=window_size,
-    #                                                        window_depth_cutoff=window_depth_cutoff,
-    #                                                        window_breadth_cutoff=window_breadth_cutoff,
-    #                                                        threads_per_window=THREADS_PER_WINDOW,
-    #                                                        concurrent_windows=WINDOW_PROCS,
-    #                                                        output_csv_filename=output_csv,
-    #                                                        window_slide=WINDOW_SLIDE,
-    #                                                        insert=KEEP_INSERTS,
-    #                                                        mask_stop_codon=MASK_STOP_CODON,
-    #                                                        remove_duplicates=REMOVE_DUPLICATES)
-
-    rconfig_file = os.path.dirname(os.path.realpath(__file__)) + os.sep +"simulations" + os.sep + "R" + os.sep + "umberjack_unit_test.config"
-    with open(rconfig_file, 'w') as fh_out_config:
-        fh_out_config.write("ACTUAL_DNDS_FILENAME=" + output_csv + "\n")
-        fh_out_config.write("EXPECTED_DNDS_FILENAME=" + expected_dnds_filename + "\n")
-        fh_out_config.write("EXPECTED_DNDS_START_NUC_POS=" + str(START_NUCPOS) + "\n")
-        fh_out_config.write("EXPECTED_DNDS_END_NUC_POS=" + str(ref_len) + "\n")
-        fh_out_config.write("INDELIBLE_DNDS_FILENAME=" + indelible_dnds_filename + "\n")
-
-    Rscript_wdir =  os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep + "simulations" + os.sep + "R")
-    subprocess.check_call(["Rscript", "-e",
-                           ("library(knitr); " +
-                            "setwd('{}'); ".format(Rscript_wdir) +
-                            "spin('umberjack_unit_test.R', knit=FALSE); " +
-                            "knit2html('./umberjack_unit_test.Rmd', stylesheet='./markdown_bigwidth.css')")],
-                          shell=False, env=os.environ)
-    shutil.copy(Rscript_wdir + os.sep + "umberjack_unit_test.html",
-                outdir + os.sep + "umberjack_unit_test.html")
+    # rconfig_file = os.path.dirname(os.path.realpath(__file__)) + os.sep +"simulations" + os.sep + "R" + os.sep + "umberjack_unit_test.config"
+    # with open(rconfig_file, 'w') as fh_out_config:
+    #     fh_out_config.write("ACTUAL_DNDS_FILENAME=" + output_csv + "\n")
+    #     fh_out_config.write("EXPECTED_DNDS_FILENAME=" + expected_dnds_filename + "\n")
+    #     fh_out_config.write("EXPECTED_DNDS_START_NUC_POS=" + str(START_NUCPOS) + "\n")
+    #     fh_out_config.write("EXPECTED_DNDS_END_NUC_POS=" + str(ref_len) + "\n")
+    #     fh_out_config.write("INDELIBLE_DNDS_FILENAME=" + indelible_dnds_filename + "\n")
+    #
+    # Rscript_wdir =  os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep + "simulations" + os.sep + "R")
+    # subprocess.check_call(["Rscript", "-e",
+    #                        ("library(knitr); " +
+    #                         "setwd('{}'); ".format(Rscript_wdir) +
+    #                         "spin('umberjack_unit_test.R', knit=FALSE); " +
+    #                         "knit2html('./umberjack_unit_test.Rmd', stylesheet='./markdown_bigwidth.css')")],
+    #                       shell=False, env=os.environ)
+    # shutil.copy(Rscript_wdir + os.sep + "umberjack_unit_test.html",
+    #             outdir + os.sep + "umberjack_unit_test.html")
 
 
 
@@ -281,16 +271,30 @@ def downsample_Nmask_pad_errfree_window_by_typical(typical_outdir, errfree_outdi
                 fh_out.write(str(errfree_recdict[typical_rec.id].seq) + "\n")
 
 
-def gen_sim_data(config_file, indiv, codonsites, cov, scales):
+def gen_sim_data_helper(kw_namedtuple):
+    """
+    Helper for passing arguments to gen_sim_data() when calling in parallel
+    :param kwargs:
+    :return:
+    """
+    kwargs = kw_namedtuple._asdict()
+    return gen_sim_data(**kwargs)
+
+
+# Name	Cover	ReadLenAve	ReadLenStd	PopSize	Scale	Error	CodonSites	WindowSize	MinWinWidth	MinWinDepth	TipSwap	SameTree	Ns
+def gen_sim_data(config_file, art_profile, indiv, codonsites, cov_depth, scales,
+                 readfrag_ave, readfrag_std,
+                 seed=None, **kwargs):
     """
 
     :param str config_file: config file to output to
     :param int indiv:  total individals in population
     :param int codonsites: number of codon sites.  This must be perfectly divisible by the number of scales
-    :param int cov:  fold read coverage
-    :param [int] scales:  number of different mtuations scalings.  a different population will be generated at each mutation scaling and
+    :param int cov_depth:  fold read coverage
+    :param [str] scales:  number of different mtuations scalings.  a different population will be generated at each mutation scaling and
     then sites from the different populations will be combined in randomized manner into single population.  But each scaling will be represented equally in the combo population.
     """
+
     sim_outdir = os.path.dirname(config_file)
     filename_prefix = os.path.basename(config_file).split(".config")[0]
     if not os.path.exists(sim_outdir):
@@ -298,11 +302,9 @@ def gen_sim_data(config_file, indiv, codonsites, cov, scales):
     if os.path.exists(config_file) and os.path.getsize(config_file):
         LOGGER.warn("Not regenerating " + config_file)
     else:
-        seed = random.randint(0, sys.maxint)
+        if not seed:
+            seed = random.randint(0, sys.maxint)
 
-
-        readfrag_ave = 87
-        readfrag_std = 125
         LOGGER.debug("Creating simulation config " + config_file + " with seed " + str(seed))
         with open(config_file, 'w') as fh_out:
             fh_out.write("[sim]\n")
@@ -310,21 +312,22 @@ def gen_sim_data(config_file, indiv, codonsites, cov, scales):
             fh_out.write("NUM_INDIV={}\n".format(indiv))
             fh_out.write("SEED={}\n".format(seed))
             fh_out.write("NUM_CODON_SITES={}\n".format(codonsites))
+            fh_out.write("CODONS_PER_BLOCK={}\n".format(codonsites))
             fh_out.write("INDELIBLE_BIN_DIR=../../bin/indelible/indelible_1.03/linux_x64\n")
             fh_out.write("INDELIBLE_SCALING_RATES={}\n".format(",".join([str(x) for x in scales])))
-            fh_out.write("ART_BIN_DIR = ../../bin/art/art_3.09.15/linux_x64\n")
-            fh_out.write("ART_QUAL_PROFILE_TSV1 = ../../bin/art/art_3.09.15/Illumina_profiles/EmpMiSeq250R1.txt\n")
-            fh_out.write("ART_QUAL_PROFILE_TSV2 = ../../bin/art/art_3.09.15/Illumina_profiles/EmpMiSeq250R2.txt\n")
-            fh_out.write("ART_FOLD_COVER={}\n".format(cov))
-            fh_out.write("ART_MEAN_FRAG = {}\n".format(260))
-            fh_out.write("ART_STDEV_FRAG = {}\n".format(75))
+            fh_out.write("ART_BIN_DIR = ../../bin/art/art_3.19.15_adapter/linux_x64\n")
+            fh_out.write("ART_QUAL_PROFILE_TSV1 = {}R1.txt\n".format(art_profile))
+            fh_out.write("ART_QUAL_PROFILE_TSV2 = {}R2.txt\n".format(art_profile))
+            fh_out.write("ART_FOLD_COVER={}\n".format(cov_depth))
+            fh_out.write("ART_MEAN_FRAG = {}\n".format(readfrag_ave))
+            fh_out.write("ART_STDEV_FRAG = {}\n".format(readfrag_std))
             fh_out.write("ART_READ_LENGTH = 250\n")
             fh_out.write("ART_INSERT_RATE1 = 0.00045\n")
             fh_out.write("ART_INSERT_RATE2 = 0.00045\n")
             fh_out.write("ART_DEL_RATE1 = 0.00045\n")
             fh_out.write("ART_DEL_RATE2 = 0.00045\n")
-            fh_out.write("ART_QUAL_SHIFT1 = 2\n")
-            fh_out.write("ART_QUAL_SHIFT2 = 2\n")
+            fh_out.write("ART_QUAL_SHIFT1 = 0\n")
+            fh_out.write("ART_QUAL_SHIFT2 = 0\n")
             fh_out.write("PICARD_BIN_DIR = ../../bin/picard/picard_1.129\n")
             fh_out.write("BWA_BIN_DIR = ../../bin/bwa/bwa_0.7.12/linux_x64\n")
             fh_out.write("PROCS = {}\n".format(PROCS))
@@ -341,99 +344,344 @@ def gen_sim_data(config_file, indiv, codonsites, cov, scales):
         subprocess.check_call(["python", sim_pipeline_exe, config_file])
 
 
-def process_window_size((test_prefix, indiv, window_size)):
+def swap_window_tips(full_popn_treefile, samfile, samref,
+                     outdir, window_size, window_slide, breadth, depth, fraction_tip_swap, seed=None):
+    """
+    Create all the window fastas and window trees.  Shuffle the tip names of up to fraction_tip_swap tips.
+    :param str full_popn_read_fasta:
+    :param str full_popn_treefile:
+    :param str samfile:
+    :param str samref:
+    :param str outdir:
+    :param int window_size:
+    :param int window_slide:
+    :param float breadth:
+    :param int depth:
+    :param float fraction_tip_swap:
+    :param int seed:
+    :return:
+    """
+    if seed is None:
+        seed = random.randint(0, sys.maxint)
+        randomizer = random.Random(seed)
+
+    genome_size = sam.sam_handler.get_reflen(sam_filename=samfile, ref=samref)
+    # windows are in 1-based nucleotide positions
+    for window_start in range(1, genome_size-window_size+2, window_slide):
+        window_end = window_start + window_size - 1
+
+        window_prefix = outdir + os.sep + os.path.basename(samfile).replace(".sam", "") + ".{}_{}".format(window_start, window_end)
+        window_fasta = window_prefix + ".fasta"
+        total_tips = sam.sam_handler.create_msa_slice_from_sam(sam_filename=samfile, ref=samref,
+                                                  out_fasta_filename=window_fasta,
+                                                  mapping_cutoff=MAPQ_CUTOFF,
+                                                  read_qual_cutoff=READ_QUAL_CUTOFF,
+                                                  max_prop_N=1,
+                                                  breadth_thresh=breadth, start_pos=0, end_pos=0,
+                                                  do_insert_wrt_ref=False, do_mask_stop_codon=True,
+                                                  do_remove_dup=True, ref_len=0)
+
+
+        # To duplicate Umberjack functionality, don't bother making window tree if there aren't enough reads
+        if total_tips < depth:
+            continue
+
+        # For the reads that made it into the window, make tree that follows the full population tree topology.
+        correct_treefile_prefix = window_prefix + ".correct.nwk"
+        correct_tree_tmpfile = tempfile.NamedTemporaryFile(mode="w+", delete=False, prefix=correct_treefile_prefix)
+        correct_tree_tmpfile.close()
+
+        TestTopology.prune_copies_by_seq(in_treefile=full_popn_treefile, out_treefile=correct_tree_tmpfile.name, fastafile=window_fasta)
+
+
+        # Randomly select subset of tips to shuffle
+        total_tip_swap = round(fraction_tip_swap * total_tips)
+        orig_selected_tipnums = randomizer.sample(range(0, total_tips), total_tip_swap)
+
+        # Randomly shuffle selected tips
+        shuffled_tipnums =  orig_selected_tipnums.copy()  # make a copy because random.shuffle() shuffles list in place
+        randomizer.shuffle(shuffled_tipnums)
+
+        window_tree = Phylo.read(correct_tree_tmpfile.name, "newick")
+        tips = window_tree.get_terminals()
+        orig_selected_tipnames = [ tips[i].name for i in orig_selected_tipnums]  # keep copy of original names because we will overwrite tip names
+        for i, swap_tipnum in enumerate(shuffled_tipnums):
+            tips[swap_tipnum].name = orig_selected_tipnames[i].name
+
+        window_treefile = window_prefix + ".nwk"
+        Phylo.write(window_tree, window_treefile, "newick")
+
+
+def process_window_size_helper(kw_namedtuple):
+    """
+    Helper function to call process_window_size with dict as args
+    :param args:
+    :return:
+    """
+    kwargs = kw_namedtuple._asdict()
+    return process_window_size(**kwargs)
+
+
+def process_window_size(test_prefixes, window_size, breadth, depth, min_qual, tip_swap, missing, seed=None, **kwargs):
     """
     Umberjack output for the given configurations.
     :return:
     """
-     # Run sliding windows and collect stats
-    FULL_POPN_FASTA =  SIM_DATA_DIR + os.sep + test_prefix + "/mixed/" + test_prefix + ".mixed.fasta"
-    REFERENCE_FASTA =  SIM_DATA_DIR + os.sep + test_prefix + "/mixed/" + test_prefix + ".mixed.consensus.fasta"
+    OUT_DIR =   (SIM_OUT_DIR + os.sep +
+                 "window{}.breadth{}.depth{}.qual{}.tipswap{}.missing{}".format(window_size, breadth, depth, min_qual, tip_swap, missing))
 
-    FULL_POPN_CONSERVE_CSV = REFERENCE_FASTA.replace(".consensus.fasta", ".conserve.csv")
-    INDELIBLE_DNDS_FILENAME = SIM_DATA_DIR + "/" + test_prefix + "/mixed/" + test_prefix + ".mixed.rates.csv"
-    EXPECTED_DNDS_FILENAME = REFERENCE_FASTA.replace("consensus.fasta", "dnds.tsv")
+    sam_filename_list = OUT_DIR + os.sep + "umberjack_sams.txt"
 
-    SAM_FILENAME = SIM_DATA_DIR + os.sep + test_prefix + "/mixed/aln/" + test_prefix + ".mixed.reads.consensus.bwa.sort.query.sam"
-    ORIG_CONSERVE_CSV = SIM_DATA_DIR + os.sep + test_prefix + "/mixed/reads/" + test_prefix + ".mixed.reads.conserve.csv"
-    ALN_CONSERVE_CSV = SIM_DATA_DIR + os.sep + test_prefix + "/mixed/aln/" + test_prefix + ".mixed.reads.consensus.bwa.conserve.csv"
+    with open(sam_filename_list, 'w') as fh_out_samlist:
 
-    ERR_FREE_ALN_CONSENSUS_SAM_FILENAME = SAM_FILENAME.replace(".reads.", ".reads.errFree.")
-    ERR_FREE_ORIG_CONSERVE_CSV = ORIG_CONSERVE_CSV.replace(".reads", ".reads.errFree")
-    ERR_FREE_ALN_CONSERVE_CSV = ALN_CONSERVE_CSV.replace(".reads", ".reads.errFree")
+        for test_prefix in test_prefixes:
+            # Run sliding windows and collect stats
+            FULL_POPN_FASTA =  SIM_DATA_DIR + os.sep + test_prefix + "/mixed/" + test_prefix + ".mixed.fasta"
+            FULL_POPN_TREE =  SIM_DATA_DIR + os.sep + test_prefix + "/mixed/" + test_prefix + ".mixed.nwk"
+            REFERENCE_FASTA =  SIM_DATA_DIR + os.sep + test_prefix + "/mixed/" + test_prefix + ".mixed.consensus.fasta"
 
-    for breadth in [0.7, 0.8, 0.9]:
-        for depth in [0.01*indiv, 0.1*indiv]:
-            OUT_DIR =   SIM_OUT_DIR + os.sep + test_prefix + os.sep + REF + os.sep + "window{}.breadth{}.depth{}".format(window_size, breadth, depth)
-            ACTUAL_DNDS_FILENAME = OUT_DIR + os.sep + 'actual_dnds_by_site.csv'
-            COLLATE_ACT_DNDS_FILENAME = OUT_DIR + os.sep + "collate_dnds.csv"
+            FULL_POPN_CONSERVE_CSV = REFERENCE_FASTA.replace(".consensus.fasta", ".conserve.csv")
+            INDELIBLE_DNDS_FILENAME = SIM_DATA_DIR + "/" + test_prefix + "/mixed/" + test_prefix + ".mixed.rates.csv"
+            EXPECTED_DNDS_FILENAME = REFERENCE_FASTA.replace("consensus.fasta", "dnds.tsv")
 
+            SAM_FILENAME = SIM_DATA_DIR + os.sep + test_prefix + "/mixed/aln/" + test_prefix + ".mixed.reads.consensus.bwa.sort.query.sam"
+            ORIG_CONSERVE_CSV = SIM_DATA_DIR + os.sep + test_prefix + "/mixed/reads/" + test_prefix + ".mixed.reads.conserve.csv"
+            ALN_CONSERVE_CSV = SIM_DATA_DIR + os.sep + test_prefix + "/mixed/aln/" + test_prefix + ".mixed.reads.consensus.bwa.conserve.csv"
 
-            ERR_FREE_OUT_DIR =   SIM_OUT_DIR + os.sep + test_prefix + os.sep + REF + os.sep + "window{}.breadth{}.depth{}.errFree".format(window_size, breadth, depth)
-            ERR_FREE_ACTUAL_DNDS_CSV = ERR_FREE_OUT_DIR + os.sep + 'actual_dnds_by_site.csv'
-            COLLATE_ACT_ERRFREE_DNDS_FILENAME = ERR_FREE_OUT_DIR + os.sep + "collate_dnds.csv"
+            ERR_FREE_ALN_CONSENSUS_SAM_FILENAME = SAM_FILENAME.replace(".reads.", ".reads.errFree.")
+            ERR_FREE_ORIG_CONSERVE_CSV = ORIG_CONSERVE_CSV.replace(".reads", ".reads.errFree")
+            ERR_FREE_ALN_CONSERVE_CSV = ALN_CONSERVE_CSV.replace(".reads", ".reads.errFree")
 
-            umberjack_html =   OUT_DIR + os.sep + "umberjack_unit_test.html"
-            errfree_umberjack_html =   ERR_FREE_OUT_DIR + os.sep + "umberjack_unit_test.html"
-            if os.path.exists(umberjack_html) and os.path.getsize(umberjack_html) and os.path.exists(errfree_umberjack_html) and os.path.getsize(errfree_umberjack_html):
-                LOGGER.warn("Not redoing simulations for " + umberjack_html)
-                return
+            # simulations/data/small.cov0.5.indiv1000.codon3000.scale1/mixed/aln/small.cov0.5.indiv1000.codon3000.scale1.mixed.reads.consensus.bwa.sort.query.sam
+            fh_out_samlist.write(SAM_FILENAME + "\n")
 
+            sample_ref_out_dir = (OUT_DIR + os.sep +
+                                  test_prefix + ".mixed.reads.consensus.bwa.sort.query" + os.sep +
+                                  "consensus")
 
-            # # typical reads
-            do_sliding_window(outdir=OUT_DIR, output_csv=ACTUAL_DNDS_FILENAME,
-                              samfilename=SAM_FILENAME, ref_fasta=REFERENCE_FASTA,
-                              expected_dnds_filename=EXPECTED_DNDS_FILENAME,
-                              indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
-                              window_size=window_size, window_depth_cutoff=int(depth), window_breadth_cutoff=breadth)
-            # do_collate(outdir=OUT_DIR, output_csv=COLLATE_ACT_DNDS_FILENAME,
-            #            ref_fasta=REFERENCE_FASTA,
-            #            full_popn_fasta=FULL_POPN_FASTA,
-            #            expected_dnds_filename=EXPECTED_DNDS_FILENAME,
-            #            indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
-            #            full_popn_conserve_csv=FULL_POPN_CONSERVE_CSV,
-            #            orig_conserve_csv=ORIG_CONSERVE_CSV, aln_conserve_csv=ALN_CONSERVE_CSV)
+            ACTUAL_DNDS_FILENAME = (sample_ref_out_dir + os.sep +
+                                   test_prefix + ".mixed.reads.consensus.bwa.sort.query.dnds.csv")
+            # COLLATE_ACT_DNDS_FILENAME = OUT_DIR + os.sep + "collate_dnds.csv"
+
+            # If we want to test recombination, we randomly swap tips in the window tree.
+            # Create the window fasta and window trees.  Then call umberjack.
+            # Expect umberjack to avoid recreating the window trees since they already exist.
 
 
-            # #errfree reads
-            # do_sliding_window(outdir=ERR_FREE_OUT_DIR, output_csv=ERR_FREE_ACTUAL_DNDS_CSV,
-            #                   samfilename=ERR_FREE_ALN_CONSENSUS_SAM_FILENAME, ref_fasta=REFERENCE_FASTA,
-            #                   expected_dnds_filename=EXPECTED_DNDS_FILENAME,
-            #                   indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
-            #                   window_size=window_size, window_depth_cutoff=int(depth), window_breadth_cutoff=breadth)
-            # do_collate(outdir=ERR_FREE_OUT_DIR, output_csv=COLLATE_ACT_ERRFREE_DNDS_FILENAME,
-            #            ref_fasta=REFERENCE_FASTA,
-            #            full_popn_fasta=FULL_POPN_FASTA,
-            #            expected_dnds_filename=EXPECTED_DNDS_FILENAME,
-            #            indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
-            #            full_popn_conserve_csv=FULL_POPN_CONSERVE_CSV,
-            #            orig_conserve_csv=ERR_FREE_ORIG_CONSERVE_CSV, aln_conserve_csv=ERR_FREE_ALN_CONSERVE_CSV)
+            if tip_swap:
+                samref = Utility.get_fasta_headers(REFERENCE_FASTA)[0]
+                swap_window_tips(full_popn_treefile=FULL_POPN_TREE, samfile=SAM_FILENAME, samref=samref,
+                 outdir=sample_ref_out_dir, window_size=window_size, window_slide=WINDOW_SLIDE,
+                 breadth=breadth, depth=depth, fraction_tip_swap=tip_swap, seed=seed)
 
-            LOGGER.debug("Done umberjack and collectdnds for " + OUT_DIR)
+
+
+            # ERR_FREE_OUT_DIR =   SIM_OUT_DIR + os.sep + test_prefix + os.sep + REF + os.sep + "window{}.breadth{}.depth{}.errFree".format(window_size, breadth, depth)
+            # ERR_FREE_ACTUAL_DNDS_CSV = ERR_FREE_OUT_DIR + os.sep + 'actual_dnds_by_site.csv'
+            # COLLATE_ACT_ERRFREE_DNDS_FILENAME = ERR_FREE_OUT_DIR + os.sep + "collate_dnds.csv"
+            #
+            # umberjack_html =   OUT_DIR + os.sep + "umberjack_unit_test.html"
+            # errfree_umberjack_html =   ERR_FREE_OUT_DIR + os.sep + "umberjack_unit_test.html"
+            # if os.path.exists(umberjack_html) and os.path.getsize(umberjack_html) and os.path.exists(errfree_umberjack_html) and os.path.getsize(errfree_umberjack_html):
+            #     LOGGER.warn("Not redoing simulations for " + umberjack_html)
+            #     return
+
+
+    # # typical reads
+    do_sliding_window(outdir=OUT_DIR, output_csv="",
+                      samfilename_list=sam_filename_list,
+                      window_size=window_size, window_depth_cutoff=int(depth), window_breadth_cutoff=breadth, min_qual=min_qual)
+
+
+
+    # do_collate(outdir=OUT_DIR, output_csv=COLLATE_ACT_DNDS_FILENAME,
+    #            ref_fasta=REFERENCE_FASTA,
+    #            full_popn_fasta=FULL_POPN_FASTA,
+    #            expected_dnds_filename=EXPECTED_DNDS_FILENAME,
+    #            indelible_dnds_filename=INDELIBLE_DNDS_FILENAME,
+    #            full_popn_conserve_csv=FULL_POPN_CONSERVE_CSV,
+    #            orig_conserve_csv=ORIG_CONSERVE_CSV, aln_conserve_csv=ALN_CONSERVE_CSV)
+
+
+
+    LOGGER.debug("Done umberjack and collectdnds for " + OUT_DIR)
+
+
+
+def get_popn_scales(scale_str):
+    """
+    From the SIM_ARGS_CSV, gets the genome block mutation scalings per population.
+
+    we allow reproducing the same population at different mutation scalings,
+    or generating the genome by concatenating blocks at different mutation scalings to
+    Each population is separated by semicolon.
+    EG) this indicates that there should be 3 populations, each scaled at 1, 5, 10
+    1; 5; 10
+
+    Each genome block is separated by a comma.  Multiple genome blocks per population enclosed by square brackets.
+    EG) This indicates that there should be 2 populations,
+    one population with concatenated genome blocks scaled at 0.5, 1, 5, 10, 20, 10, 5, 1, 0.5
+    and another population with concatenated genome blocks scaled at 0.5 and 5
+    [0.5, 1,  5, 10, 20, 10, 5, 1, 0.5]; [0.5, 5]
+    :return [[float]] :  for each population returns a list of its genome block scalints
+    """
+    popn_scales = []
+    for popn_scale_str in scale_str.split(";"):
+        popn_scale_str = popn_scale_str.lstrip().rstrip()
+        popn_scale_str = popn_scale_str.replace("[", "")
+        popn_scale_str = popn_scale_str.replace("]", "")
+        popn_scale_str = popn_scale_str.replace(" ", "")
+
+        genome_block_scales = [float(block_scale_s) for block_scale_s in popn_scale_str.split(",")]
+
+        popn_scales.append(genome_block_scales)
+
+    return popn_scales
+
+
+def get_popn_scales_str(scale_str):
+    """
+    From the SIM_ARGS_CSV, gets the genome block mutation scalings per population.
+
+    we allow reproducing the same population at different mutation scalings,
+    or generating the genome by concatenating blocks at different mutation scalings to
+    Each population is separated by semicolon.
+    EG) this indicates that there should be 3 populations, each scaled at 1, 5, 10
+    1; 5; 10
+
+    Each genome block is separated by a comma.  Multiple genome blocks per population enclosed by square brackets.
+    EG) This indicates that there should be 2 populations,
+    one population with concatenated genome blocks scaled at 0.5, 1, 5, 10, 20, 10, 5, 1, 0.5
+    and another population with concatenated genome blocks scaled at 0.5 and 5
+    [0.5, 1,  5, 10, 20, 10, 5, 1, 0.5]; [0.5, 5]
+    :return [[str]] :  for each population returns a list of its genome block scalings as strings
+    """
+    popn_scales = []
+    for popn_scale_str in scale_str.split(";"):
+        popn_scale_str = popn_scale_str.lstrip().rstrip()
+        popn_scale_str = popn_scale_str.replace("[", "")
+        popn_scale_str = popn_scale_str.replace("]", "")
+        popn_scale_str = popn_scale_str.replace(" ", "")
+
+        genome_block_scales = popn_scale_str.split(",")
+
+        popn_scales.append(genome_block_scales)
+
+    return popn_scales
 
 
 
 if __name__ == "__main__":
 
-    pool = pool_traceback.LoggingPool(CONCURRENT_MPIRUN)
-    TEST_PREFIX_FORMAT = "small.cov{}.indiv{}.codon{}.scale{}"
-    for cov in [0.5, 1, 2]:
-        for indiv in [1000, 2000]:
-            for codonsites in [3000]:
-                # 90 days to 10 years, average 1 year apart
+    TEST_PREFIX_FORMAT = "{}.cov{}.frag{}_{}.indiv{}.codon{}.scale{}"
 
-                for scales in [[1], [5], [10], [1, 5, 10]]:
-                    scales_join = "_".join([str(x) for x in scales])
-                    test_prefix = TEST_PREFIX_FORMAT.format(cov, indiv, codonsites, scales_join)
+    # Process all the population creation together. That can most likely be done on my machine whereas umberjack should be done on cluster.
+    with open(SIM_ARGS_TSV, 'rU') as fh_simargs:
+        reader = csv.DictReader(filter(lambda row: row[0]!='#', fh_simargs), delimiter="\t")
+        #Name	Cover	ReadLenAve	ReadLenStd	PopSize	Scale	ART_Profile	CodonSites	SameSeed	WindowSize	MinWinWidth	MinWinDepth	MinQual	TipSwap	Ns
+
+        sim_args = set()
+
+        from collections import namedtuple
+
+        PopnGroup = namedtuple("PopnGroup", field_names=["test_prefix", "art_profile", "config_file", "indiv", "codonsites",
+                                                         "cov_depth", "scales", "readfrag_ave", "readfrag_std", "seed"])
+
+        UmberjackGroup = namedtuple("UmbjerackGroup", field_names=["window_size", "min_qual", "min_win_width", "tip_swap", "missing"])
+
+        umberjack_group_to_args = dict()
+
+        # Simulations are grouped in the CSV for compact display.  Expand the arguments for each separate simulation.
+        # Only some columns allow for grouping of multiple simulations:
+        # - QualityShift
+        # - MinWinWidth
+        # - TipSwap
+        # - Ns
+        for row in reader:
+            # columns only allowed one value that dictate how the population sequencing is formed
+            prefix = row["Name"]
+            cov_depth = row["Cover"]
+            fraglen_ave = row["FragLenAve"]
+            fraglen_std = row["FragLenStd"]
+            art_profile = row["ART_Profile"]
+            popsize = row["PopSize"]
+            codonsites = row["CodonSites"]
+            is_same_seed = row["SameSeed"].lstrip().rstrip() == "1"
+
+            # columns only allowed one value that dicate how umberjack is run
+            window_size = row["WindowSize"]
+            min_win_depth = row["MinWinDepth"]
+
+            # columns allowed multiple values that dictate how the population sequencing is formed
+            scale_str = row["Scale"]
+
+            # columns allowed multiple values that dictate how umberjack is run
+            min_quals = row["MinQual"]
+            min_win_widths = row["MinWinWidth"]
+            tip_swaps = row["TipSwap"]
+            ns = row["Ns"]
+
+
+            # indicates whether we need to keep the same asg_driver.py seed for all simulations in the group
+            if is_same_seed:
+                seed = random.randint(0, sys.maxint)
+            else:
+                seed = None
+
+
+            for genome_block_scales_strs in get_popn_scales_str(scale_str):
+
+                genome_block_scales_str = "_".join(genome_block_scales_strs)
+                test_prefix = TEST_PREFIX_FORMAT.format(prefix,
+                                                        cov_depth,
+                                                        fraglen_ave,
+                                                        fraglen_std,
+                                                        popsize,
+                                                        codonsites,
+                                                        genome_block_scales_str)
+
+
+                for min_qual in min_quals.split(","):
                     config_file = SIM_DATA_DIR + os.sep + test_prefix + os.sep + test_prefix + ".config"
-                    LOGGER.debug("Handling simulated config " + config_file)
 
-                    gen_sim_data(config_file, indiv, codonsites, cov, scales)
+                    for min_win_width in min_win_widths:
+                        for tip_swap in tip_swaps:
+                            for missing in ns:
+                                pgroup = PopnGroup(test_prefix=test_prefix,
+                                               art_profile=art_profile,
+                                           config_file=config_file,
+                                           indiv=popsize,
+                                           codonsites=codonsites,
+                                           cov_depth=cov_depth,
+                                           scales=tuple(genome_block_scales_strs),
+                                           readfrag_ave=fraglen_ave,
+                                           readfrag_std=fraglen_std,
+                                           seed=seed)
+
+                                sim_args.add(pgroup)
+
+                                ugroup = UmberjackGroup(
+                                    window_size=window_size,
+                                    min_qual=min_qual,
+                                    min_win_width=min_win_width,
+                                    tip_swap=tip_swap,
+                                    missing=missing)
+
+                                if ugroup in umberjack_group_to_args:
+                                    umberjack_group_to_args[ugroup].add(pgroup)
+                                else:
+                                    umberjack_group_to_args[ugroup] = set(pgroup)
+
+    thepool =  pool_traceback.LoggingPool(processes=8)
+    for result in thepool.imap_unordered(gen_sim_data_helper, sim_args):
+            pass
+
+    thepool.close()
 
 
-                    # for result in pool.imap_unordered(process_window_size, [(test_prefix, indiv, 200),
-                    #                                                         (test_prefix, indiv, 300),
-                    #                                                         (test_prefix, indiv, 350)]):
-                    #     pass
-
-    pool.close()
+    # Let umberjack do the mpi distribution.  Just give it a list of samfiles
+    # For each umberjack mpi run, we need to cluster the simulations with the same wnidow breadth and window depth,
+    # since each umberjack run allows only 1 breadth & wdepth thresholds, but allows for multiple samfiles.
+    for umbjerack_group, group_sim_args in umberjack_group_to_args.iteritems():
+        for result in thepool.imap_unordered(process_window_size_helper, group_sim_args):
+            pass
