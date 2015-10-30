@@ -411,6 +411,96 @@ def swap_window_tips(full_popn_treefile, samfile, samref,
         window_treefile = window_prefix + ".nwk"
         Phylo.write(window_tree, window_treefile, "newick")
 
+#
+# def miss_data(full_popn_treefile, full_popn_fasta, cov_depth, indiv,
+#                      outdir, window_size, window_slide, breadth, depth, fraction_tip_swap, seed=None):
+#     """
+#     Create all the window fastas and window trees.
+#     Completely ignores ART read simulators reads.
+#     Instead, randomly resamples sequences from full population for each window.
+#     Then it randomly masks bases from each sequence at ends and middle.
+#
+#     :param str full_popn_read_fasta:
+#     :param str full_popn_treefile:
+#     :param str samfile:
+#     :param str samref:
+#     :param str outdir:
+#     :param int window_size:
+#     :param int window_slide:
+#     :param float breadth:
+#     :param int depth:
+#     :param float fraction_tip_swap:
+#     :param int seed:
+#     :return:
+#     """
+#     if seed is None:
+#         seed = random.randint(0, sys.maxint)
+#         randomizer = random.Random(seed)
+#
+#     genome_size = sam.sam_handler.get_reflen(sam_filename=samfile, ref=samref)
+#     # windows are in 1-based nucleotide positions
+#     for window_start in range(1, genome_size-window_size+2, window_slide):
+#         window_end = window_start + window_size - 1
+#
+#         window_prefix = outdir + os.sep + os.path.basename(samfile).replace(".sam", "") + ".{}_{}".format(window_start, window_end)
+#         window_fasta = window_prefix + ".fasta"
+#
+#         #subsample(treefile, fastafile, out_treefile, out_fastafile, sample_fraction, replace=False, seed=None,
+#                   # miss_fraction=None, removedup=True):
+#
+#
+#         perfect_window_tmp = tempfile.NamedTemporaryFile("w+", dir=outdir, prefix=os.path.basename(window_prefix) + ".perfect")
+#         perfect_window_tmp.close()
+#
+#
+#
+#         # How much to subsample?
+#         # fold coverage * individ * window size / read size
+#         TestTopology.subsample(treefile=full_popn_treefile, fastafile=full_popn_fasta,
+#                                out_treefile, out_fastafile, sample_fraction, replace=False, seed=None,
+#                   miss_fraction=None, removedup=True):
+#
+#         TestTopology.subsample(in_treefile=full_popn_treefile, out_treefile=correct_tree_tmpfile.name, fastafile=window_fasta)
+#
+#         total_tips = sam.sam_handler.create_msa_slice_from_sam(sam_filename=samfile, ref=samref,
+#                                                   out_fasta_fileTname=window_fasta,
+#                                                   mapping_cutoff=MAPQ_CUTOFF,
+#                                                   read_qual_cutoff=READ_QUAL_CUTOFF,
+#                                                   max_prop_N=1,
+#                                                   breadth_thresh=breadth, start_pos=0, end_pos=0,
+#                                                   do_insert_wrt_ref=False, do_mask_stop_codon=True,
+#                                                   do_remove_dup=True, ref_len=0)
+#
+#
+#         # To duplicate Umberjack functionality, don't bother making window tree if there aren't enough reads
+#         if total_tips < depth:
+#             continue
+#
+#         # For the reads that made it into the window, make tree that follows the full population tree topology.
+#         correct_treefile_prefix = window_prefix + ".correct.nwk"
+#         correct_tree_tmpfile = tempfile.NamedTemporaryFile(mode="w+", delete=False, prefix=correct_treefile_prefix)
+#         correct_tree_tmpfile.close()
+#
+#         TestTopology.prune_copies_by_seq(in_treefile=full_popn_treefile, out_treefile=correct_tree_tmpfile.name, fastafile=window_fasta)
+#
+#
+#         # Randomly select subset of tips to shuffle
+#         total_tip_swap = round(fraction_tip_swap * total_tips)
+#         orig_selected_tipnums = randomizer.sample(range(0, total_tips), total_tip_swap)
+#
+#         # Randomly shuffle selected tips
+#         shuffled_tipnums =  orig_selected_tipnums.copy()  # make a copy because random.shuffle() shuffles list in place
+#         randomizer.shuffle(shuffled_tipnums)
+#
+#         window_tree = Phylo.read(correct_tree_tmpfile.name, "newick")
+#         tips = window_tree.get_terminals()
+#         orig_selected_tipnames = [ tips[i].name for i in orig_selected_tipnums]  # keep copy of original names because we will overwrite tip names
+#         for i, swap_tipnum in enumerate(shuffled_tipnums):
+#             tips[swap_tipnum].name = orig_selected_tipnames[i].name
+#
+#         window_treefile = window_prefix + ".nwk"
+#         Phylo.write(window_tree, window_treefile, "newick")
+
 
 def process_window_size_helper(kw_namedtuple):
     """
@@ -682,7 +772,7 @@ if __name__ == "__main__":
     # Let umberjack do the mpi distribution.  Just give it a list of samfiles
     # For each umberjack mpi run, we need to cluster the simulations with the same wnidow breadth and window depth,
     # since each umberjack run allows only 1 breadth & wdepth thresholds, but allows for multiple samfiles.
-    thepool =  pool_traceback.LoggingPool(processes=8)
+    thepool =  pool_traceback.LoggingPool(processes=2)
     for umbjerack_group, group_sim_args in umberjack_group_to_args.iteritems():
         for result in thepool.imap_unordered(process_window_size_helper, group_sim_args):
             pass
