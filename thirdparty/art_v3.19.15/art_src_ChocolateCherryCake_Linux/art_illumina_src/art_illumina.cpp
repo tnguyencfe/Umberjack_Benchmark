@@ -778,11 +778,18 @@ int main(int argc, char* argv[]){
 					sR.printRead(SAMFILE);
 					sR2.printRead(SAMFILE);
 					if(err_free_sam){
-						sR.seq=a_read.seq_ref;
+						// SeqRead.seq_ref contains the portion of the reference that went into read.  No inserts wrt ref.  Includes based in read that are deleted wrt ref.
+						// EG) readlen = 4bp
+						// Ref:  ACGTT
+						// Read: ACTT, G is deleted from read
+						// SeqRead.seq_ref = ACGTT
+						// Since this is the error free sam, we want to print out the full read with deletions reinstated and ends clipped as if there were no errors during sequencing.
+						// Ie) print out ACGT instead of ACTT or ACGTT
+						sR.seq=a_read.seq_ref.substr(0, min(read_len, int(a_read.seq_ref.size())));
 						sR.qual.resize(sR.seq.size());
 						for(size_t k=0; k<sR.qual.size(); k++) sR.qual[k]=max_q_c;
 
-						sR2.seq=a_read_2.seq_ref;
+						sR2.seq=a_read_2.seq_ref.substr(0, min(read_len, int(a_read_2.seq_ref.size())));
 						sR2.qual.resize(sR2.seq.size());
 						for(size_t k=0; k<sR2.qual.size(); k++) sR2.qual[k]=max_q_c;
 						if(a_read.is_plus_strand) {
@@ -826,17 +833,17 @@ int main(int argc, char* argv[]){
 							}
 						}
 
-						//get new error free reads when the original reads having indels
-						if (sR.seq.length()!=a_read.seq_ref.size()){
-							sR.seq=a_art.ref_seq.substr(sR.pos-1, a_read.seq_ref.size());
-							sR.qual.resize(sR.seq.size());
-							for(size_t k=0; k<sR.qual.size(); k++) sR.qual[k]=max_q_c;
-						}
-						if (sR2.seq.length()!=a_read_2.seq_ref.size()){
-							sR2.seq=a_art.ref_seq.substr(sR2.pos-1, a_read_2.seq_ref.size());
-							sR2.qual.resize(sR2.seq.size());
-							for(size_t k=0; k<sR2.qual.size(); k++) sR2.qual[k]=max_q_c;
-						}
+//						//get new error free reads when the original reads having indels
+//						if (sR.seq.length()!=a_read.seq_ref.size()){
+//							sR.seq=a_art.ref_seq.substr(sR.pos-1, a_read.seq_ref.size());
+//							sR.qual.resize(sR.seq.size());
+//							for(size_t k=0; k<sR.qual.size(); k++) sR.qual[k]=max_q_c;
+//						}
+//						if (sR2.seq.length()!=a_read_2.seq_ref.size()){
+//							sR2.seq=a_art.ref_seq.substr(sR2.pos-1, a_read_2.seq_ref.size());
+//							sR2.qual.resize(sR2.seq.size());
+//							for(size_t k=0; k<sR2.qual.size(); k++) sR2.qual[k]=max_q_c;
+//						}
 
 						sR.printRead(SAMFILE_EF);
 						sR2.printRead(SAMFILE_EF);
