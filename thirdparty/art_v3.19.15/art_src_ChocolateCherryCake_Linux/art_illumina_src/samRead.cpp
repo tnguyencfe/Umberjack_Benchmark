@@ -91,9 +91,18 @@ void samRead::getCigar(string & aln_ref, string& aln_read, bool use_M){
 		// The aligned reference will be shorter than the aligned read
 		// if the aligned read has adapter or base contamination because the fragment was shorter than the read.
 		// The contamination will happen on the 3' end of the read.
-		// We also have to take account inserts wrt ref in the read when tacking on softclips
+		// We also have to take account inserts wrt ref in the read when tacking on softclips.
+		// If there are deletions wrt reference in the adapter contamination (it won't show up in the aln_read),
+		// then we need to reduce the soft clip length calculation.
+		// We don't have to adjust the actual sequence because it's already been adjusted for us in seqRead.
 		if (aln_ref.length()  < aln_read.length()) {
-			int soft_clip_len = aln_read.length() - aln_ref.length() -  ins_len;
+			int adapter_del_wrt_ref = 0;
+			for (int i = aln_ref.length(); i < aln_read.length(); i++) {
+				if (aln_read[i] == '-') {
+					adapter_del_wrt_ref ++;
+				}
+			}
+			int soft_clip_len = aln_read.length() - aln_ref.length() -  ins_len - adapter_del_wrt_ref;
 			ostringstream oss;
 			oss << soft_clip_len << 'S';
 			cigar = oss.str() + cigar;
@@ -133,7 +142,13 @@ void samRead::getCigar(string & aln_ref, string& aln_read, bool use_M){
 
 	//forward direction, fragment shorter than read
 	if((flag & 0x10) == 0 && aln_ref.length()  < aln_read.length()) {
-		int soft_clip_len = aln_read.length() - aln_ref.length();
+		int adapter_del_wrt_ref = 0;
+		for (int i = aln_ref.length(); i < aln_read.length(); i++) {
+			if (aln_read[i] == '-') {
+				adapter_del_wrt_ref ++;
+			}
+		}
+		int soft_clip_len = aln_read.length() - aln_ref.length() -  adapter_del_wrt_ref;
 		ostringstream oss;
 		oss << soft_clip_len << 'S';
 		cigar.append(oss.str());
