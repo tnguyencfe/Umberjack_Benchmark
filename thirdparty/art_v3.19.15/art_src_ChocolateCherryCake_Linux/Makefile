@@ -334,7 +334,11 @@ top_builddir = .
 top_srcdir = .
 AUTOMAKE_OPTIONS = subdir-objects
 ACLOCAL_AMFLAGS = ${ACLOCAL_FLAGS}
-AM_CPPFLAGS = -O3
+ifndef $(DEBUG)
+	AM_CPPFLAGS =
+else
+	AM_CPPFLAGS = -O3
+endif
 art_illumina_SOURCES = art_illumina_src/art.h art_illumina_src/empdist.h art_illumina_src/readSeqFile.h art_illumina_src/seqRead.h art_illumina_src/samRead.h \
 		       art_illumina_src/art_illumina.cpp art_illumina_src/art_qual_scale.cpp art_illumina_src/empdist.cpp art_illumina_src/readSeqFile.cpp art_illumina_src/seqRead.cpp art_illumina_src/samRead.cpp
 

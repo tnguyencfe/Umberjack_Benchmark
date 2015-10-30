@@ -111,14 +111,18 @@ public:
         if(indel.size()==0) return false;
         map<int,char,less<int> >::iterator it;
         aln_read=seq_read; aln_ref=seq_ref;
+        int total_ins_wrt_ref = 0;
+        int total_del_wrt_ref = 0;
         for(it=indel.begin(); it!=indel.end(); it++){
             if(it->second!='-'){
-                if(it->first > aln_ref.length())break;
-                aln_ref.insert(it->first,1,'-');
+                if((it->first + total_ins_wrt_ref) > aln_ref.length())break;
+                aln_ref.insert(it->first + total_ins_wrt_ref,1,'-');
+                total_ins_wrt_ref++;
             }
             else{
-                if(it->first > aln_read.length())break;
-                aln_read.insert(it->first,1,'-');
+                if((it->first + total_del_wrt_ref) > aln_read.length())break;
+                aln_read.insert(it->first + total_del_wrt_ref,1,'-');
+                total_del_wrt_ref++;
             }
         }
         return true;
