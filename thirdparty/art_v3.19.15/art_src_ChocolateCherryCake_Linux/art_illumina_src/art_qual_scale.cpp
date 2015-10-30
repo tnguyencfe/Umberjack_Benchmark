@@ -153,8 +153,8 @@ bool art::next_pair_read_indel_cmp(seqRead& read_1, seqRead& read_2){
     }
     read_1.seq_real.append(string(adapter));
     read_2.seq_real.append(string(adapter2));
-    while(read_1.seq_real.length() < read_len) read_1.seq_real.append(string("AAAAAAAAAAAAAAAAAAAA"));
-    while(read_2.seq_real.length() < read_len) read_2.seq_real.append(string("AAAAAAAAAAAAAAAAAAAA"));
+    while(read_1.seq_real.length() < read_len-slen_1) read_1.seq_real.append(string("AAAAAAAAAAAAAAAAAAAA"));
+    while(read_2.seq_real.length() < read_len-slen_2) read_2.seq_real.append(string("AAAAAAAAAAAAAAAAAAAA"));
 
 
     int ref_len1 = (fragment_len < (read_len-slen_1)) ? fragment_len : (read_len-slen_1);
