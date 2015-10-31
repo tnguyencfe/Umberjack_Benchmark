@@ -16,6 +16,7 @@ import Bio.Phylo as Phylo
 from test_topology import TestTopology
 settings.setup_logging()
 import tempfile
+import run_sliding_window_tree as simulator
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.propagate = 1
@@ -502,50 +503,55 @@ def collect_dnds_helper(args):
 
 def recollect_dnds_all(all_inferred_dnds_dir, sim_data_dir):
     """
-    Recollects the collate_dnds.csv info
+    Recollects the collate_dnds.csv info for simulated data.
+    Only collects the simulated data specified in the sim_args.tsv file.
+
     :param all_inferred_dnds_dir:
     :param sim_data_dir:
     :return:
     """
+    popn_groups, umberjack_group_to_args = simulator.parse_sim_args_tsv()
+
     pool = multiprocessing.Pool(PROCS)
     args_itr = []
 
     i = 0
-    inferred_collate_dnds_csvs = []
-    for dirpath, dirnames, filenames in  os.walk(all_inferred_dnds_dir):
-        #for filename in fnmatch.filter(filenames, "collate_dnds.csv"):
-        for filename in fnmatch.filter(filenames, "actual_dnds_by_site.csv"):
-            #/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/smTall.cov5.indiv1000.codon500.window350.breadth0.6.depth100.0/consensus/window350/collate_dnds.csv
-            sim_name = os.path.basename(os.path.abspath(dirpath + os.sep + os.pardir + os.sep + os.pardir))
+    for umberjackgroup, popn_groups_per_ugroup in umberjack_group_to_args.iteritems():
+        for popn_group in popn_groups_per_ugroup:
+            sample_ref_outdir = simulator.get_sample_ref_outdir(umberjackgroup, popn_group)
+            #for filename in fnmatch.filter(filenames, "collate_dnds.csv"):
+            for filename in fnmatch.filter(filenames, "actual_dnds_by_site.csv"):
+                #/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/smTall.cov5.indiv1000.codon500.window350.breadth0.6.depth100.0/consensus/window350/collate_dnds.csv
+                sim_name = os.path.basename(os.path.abspath(dirpath + os.sep + os.pardir + os.sep + os.pardir))
 
 
-            LOGGER.debug("Recollecting sim_name=" + sim_name)
-            inferred_collate_dnds_csv = dirpath + os.sep + "collate_dnds.csv"
-            # /home/thuy/gitrepo/Umberjack_Benchmark/simulations/data/small.cov1.indiv1000.codon500.window200.breadth0.6.depth100.0/mixed/small.cov1.indiv1000.codon500.window200.breadth0.6.depth100.0.mixed.fasta
-            full_popn_fasta = sim_data_dir + os.sep + sim_name + os.sep + "mixed" + os.sep + sim_name + ".mixed.fasta"
+                LOGGER.debug("Recollecting sim_name=" + sim_name)
+                inferred_collate_dnds_csv = dirpath + os.sep + "collate_dnds.csv"
+                # /home/thuy/gitrepo/Umberjack_Benchmark/simulations/data/small.cov1.indiv1000.codon500.window200.breadth0.6.depth100.0/mixed/small.cov1.indiv1000.codon500.window200.breadth0.6.depth100.0.mixed.fasta
+                full_popn_fasta = sim_data_dir + os.sep + sim_name + os.sep + "mixed" + os.sep + sim_name + ".mixed.fasta"
 
-            LOGGER.debug("Recollating Inferred collated dnds=" + inferred_collate_dnds_csv)
-            LOGGER.debug("Recollating Sim Full Popn Fasta = " + full_popn_fasta)
+                LOGGER.debug("Recollating Inferred collated dnds=" + inferred_collate_dnds_csv)
+                LOGGER.debug("Recollating Sim Full Popn Fasta = " + full_popn_fasta)
 
-            # # TODO:  remove me
-            # if dirpath.find("/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/small.cov5.indiv1000.codon140.scale50/consensus/window200.breadth0.9.depth10.0.errFree") < 0:
-            #     continue
-            args_itr.append(dict(output_dir=dirpath, output_csv_filename=inferred_collate_dnds_csv, full_popn_fasta=full_popn_fasta))
-            inferred_collate_dnds_csvs.extend([inferred_collate_dnds_csv])
+                # # TODO:  remove me
+                # if dirpath.find("/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/small.cov5.indiv1000.codon140.scale50/consensus/window200.breadth0.9.depth10.0.errFree") < 0:
+                #     continue
+                args_itr.append(dict(output_dir=dirpath, output_csv_filename=inferred_collate_dnds_csv, full_popn_fasta=full_popn_fasta))
+                inferred_collate_dnds_csvs.extend([inferred_collate_dnds_csv])
+                if i >= 10:
+                    break
+
+                i += 1
+
             if i >= 10:
                 break
 
-            i += 1
 
-        if i >= 10:
-            break
+        for result in pool.imap_unordered(collect_dnds_helper, args_itr, 1):
+            pass
 
-
-    for result in pool.imap_unordered(collect_dnds_helper, args_itr, 1):
-        pass
-
-    pool.terminate()
-    return inferred_collate_dnds_csvs
+        pool.terminate()
+        return inferred_collate_dnds_csvs
 
 
 if __name__ == "__main__":
