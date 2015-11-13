@@ -1,11 +1,11 @@
-FieldName,Min,Max,Is_Int,Notes
-Cover,0.2,8,0,Coverage per Individual
-FragLenAve,104,400,1,
-FragLenStd,50,100,1,
-TreeLen,1,5,0,
-WindowSize,200,300,1,
-MinWinWidth,0.6,0.9,0,
-MinWinDepth,0.05,1,0,"Fraction of Indiv or Fraction of Coverage, whatever is smaller"
-MinQual,10,30,1,
-Breakpoints,0,4,1,
-TotalMutRates,1,3,1,
+FieldName,Min,Max,Is_Int,Notes,
+Cover,0.2,8,0,Coverage per Individual,
+FragLenAve,104,300,1,,
+FragLenStd,50,100,1,,
+TreeLen,0.7,6,0,,
+WindowSize,200,300,1,,
+MinWinWidth,0.6,0.9,0,,
+MinWinDepth,0.05,1,0,Fraction of Indiv or Fraction of Coverage, whatever is smaller
+MinQual,10,30,1,,
+Breakpoints,0,3,1,,
+TotalMutRates,1,3,1,,
