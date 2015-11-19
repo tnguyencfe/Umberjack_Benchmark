@@ -17,6 +17,8 @@ from test_topology import TestTopology
 settings.setup_logging()
 import tempfile
 import run_sliding_window_tree as simulator
+import sys
+from argparse import ArgumentParser
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.propagate = 1
@@ -60,20 +62,59 @@ def get_tree_dist(window_treefile, full_popn_treefile, window_fasta, win_nuc_ran
     TestTopology.resample_tree_from_fasta(treefile=full_popn_treefile, out_treefile=expected_treefile_tmp.name, fastafile=window_fasta)
 
 
-    rf_dist = TestTopology.get_rf_dist(expected_treefile_tmp.name, window_treefile)
+    rf_dist = TestTopology.get_weighted_rf_dist(expected_treefile_tmp.name, window_treefile)
 
     os.remove(expected_treefile_tmp.name)
     return rf_dist
 
 
 
-def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None):
+def get_recombo_breaks(filename):
+    """
+    Returns the recombinant section start and end in 1-based nucleotide coordinates.
+    :param str filename: filepath to any file for a recombinant section in the sim_pipeline.py dataset generation.
+    :return int, int:  section start, section end or (None, None) if no match found
+    """
+    # *.break.<section nuc 1based start>_<section nuc 1based end>.*
+    section_start = None
+    section_end = None
+    section_match = re.search(pattern=r"break(\d+)_(\d+)", string=filename)
+    if section_match:
+        section_start = int(section_match.group(1))
+        section_end = int(section_match.group(2))
+    return section_start, section_end
+
+
+def is_intersect(range_start1, range_end1, range_start2, range_end2):
+    """
+    Whether the ranges intersect.  If boundary positions match up, that still counts as intersection.
+    :param int range_start1:  first range start position
+    :param int range_end1:  first range end position
+    :param int range_start2:  2nd range start position
+    :param int range_end2:  2nd range end position
+    :return bool: True if they intersect
+    """
+    if range_start1 > range_end1 or range_start2 > range_end2:
+        raise ValueError("Range start should be before range end")
+
+    return (range_end1 >= range_start2) or (range_end2 >= range_start1)
+
+
+def collect_dnds(output_dir, output_csv_filename, sim_data_dir, comments=None):
     """
     Collects everything related to dnds into 1 table.  Does not do any aggregation of values.  Useful for debugging.
     :return:
     """
     LOGGER.debug("Collect dnds for " + output_csv_filename)
     with open(output_csv_filename, 'w') as fh_out:
+
+        # There might be recombination in the full population, in which there will be multiple trees.
+        full_popn_treefiles = glob.glob(sim_data_dir + os.sep + "subs" + os.sep + "*.break.*_*.fasttree.nwk")
+        full_popn_fasta = glob.glob(sim_data_dir + os.sep + "fullpopn" + os.sep + "*_TRUE.fasta")[0]
+
+        # (section start, section end): treefile
+        breaks_to_treefile =  dict([ (get_recombo_breaks(x), x) for x in full_popn_treefiles ])
+
         if comments:
             fh_out.write(comments)
 
@@ -82,10 +123,10 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
                                                     "CodonSite",  # 1-based codon site
                                                     "CodonDepth",  # Total unambiguous codon (depth) at the codon site
                                                     "AADepth", # Total depth of codons that code unambiguously for 1 AA.
-                                                    "Conserve",  # Average per-base fraction of conservation across the codon.  Includes N's and gaps.
-                                                    "Entropy",  # Average per-base metric entropy across the codon.  Includes N's and gaps.
-                                                    "ConserveTrueBase",  # Average per-base fraction of conservation across the codon.  Excludes N's and gaps
-                                                    "EntropyTrueBase",  # Average per-base fraction of entropy across the codon.  Excludes N's and gaps
+                                                    "ConserveAllCodon",  # Average per-base fraction of conservation across the codon.  Includes N's and gaps.
+                                                    "EntropyAllCodon",  # Average per-base metric entropy across the codon.  Includes N's and gaps.
+                                                    "ConserveCodon",  # Average per-base fraction of conservation across the codon.  Excludes N's and gaps
+                                                    "EntropyCodon",  # Average per-base fraction of entropy across the codon.  Excludes N's and gaps
                                                     "N",  # Observed Nonsynonymous substitutions
                                                     "S",  # Observed Nonsynonymous substitutions
                                                     "EN",  # Expected Nonsynonymous substitutions
@@ -105,7 +146,11 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
                                                     ]
                                 )
         writer.writeheader()
-        for slice_fasta_filename in glob.glob(output_dir + os.sep + "*.fasta"):
+        for slice_fasta_filename in glob.glob(output_dir + os.sep + "*.*_*.fasta"):
+
+            # don't use hyphy ancestral fasta  or fullgene msa fasta
+            if slice_fasta_filename.endswith(".anc.fasta") or slice_fasta_filename.endswith(".msa.fasta"):
+                continue
 
             # *.{start bp}_{end bp}.fasta filenames use 1-based nucleotide position numbering
             slice_fasta_fileprefix = slice_fasta_filename.split('.fasta')[0]
@@ -115,19 +160,16 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
             tree_len = None
             tree_depth = None
             tree_dist = None
-            tree_filename = slice_fasta_filename.replace(".fasta", ".tree")
-            if os.path.exists(tree_filename):
-                # NB:  FastTree tree length in nucleotide substitutions / site.  HyPhy converts trees to codon substitution/site to count codon substitutions along phylogeny
+            slice_tree_filename = slice_fasta_filename.replace(".fasta", ".tree")
+            if os.path.exists(slice_tree_filename):
+                # NB:  FastTree tree length in nucleotide substitutions / site.
+                # HyPhy converts trees to codon substitution/site to count codon substitutions along phylogeny
                 # Parse the HyPhy dnds tsv to get dN, dS,
-                tree_len, tree_depth = get_tree_len_depth(tree_filename)
+                tree_len, tree_depth = get_tree_len_depth(slice_tree_filename)
             else:
-                tree_filename = slice_fasta_filename.replace(".fasta", ".nwk")
-                if os.path.exists(tree_filename):
-                    tree_len, tree_depth = get_tree_len_depth(tree_filename)
-
-
-
-
+                slice_tree_filename = slice_fasta_filename.replace(".fasta", ".nwk")
+                if os.path.exists(slice_tree_filename):
+                    tree_len, tree_depth = get_tree_len_depth(slice_tree_filename)
 
 
             # Window ends at this 1-based nucleotide position with respect to the reference
@@ -140,7 +182,11 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
             # TODO:  Hack to remove windows that are less than the expected size.  Remove this once ubmerjack fixed
             actual_win_size = win_end_nuc_pos_1based_wrt_ref - win_start_nuc_pos_1based_wrt_ref + 1
 
-            win_size_match = re.search(pattern=r"window(\d+)", string=os.path.basename(os.path.abspath(os.path.dirname(slice_fasta_filename))))
+            # EG)
+            # <output_dir>/window{}.breadth{}.depth{}.qual{}/<sam prefix>/<ref>/<sam prefix>.<ref>.<win start>_<winend>.fasta
+            win_dirname = os.path.basename(os.path.abspath(os.path.dirname(slice_fasta_filename) +
+                                                           os.sep + os.pardir + os.sep + os.pardir))
+            win_size_match = re.search(pattern=r"window(\d+)", string=win_dirname)
             if win_size_match:
                 desired_win_size = int(win_size_match.group(1))
             else:
@@ -158,9 +204,6 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
             ns, pad, seq_err, err_aa_change, err_aa_nochange, ambig_aa_change, ambig_aa_nochange = error_by_codonpos(slice_fasta_filename, win_start_nuc_pos_1based_wrt_ref, full_popn_fasta)
 
 
-
-
-
             outrow = dict()
             outrow["Window_Start"] = win_start_nuc_pos_1based_wrt_ref
             outrow["Window_End"] = win_end_nuc_pos_1based_wrt_ref
@@ -168,26 +211,34 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
 
             dnds_tsv_filename = slice_fasta_filename.replace(".fasta", ".dnds.tsv")
             if os.path.exists(dnds_tsv_filename):
-                full_popn_treefile = full_popn_fasta.replace(".fasta", ".tree")
-                if not os.path.exists(full_popn_treefile):
-                    full_popn_treefile = full_popn_fasta.replace(".fasta", ".nwk")
-                    if not os.path.exists(full_popn_treefile):
-                        raise ValueError("Can't find full population tree (with .tree or .nwk suffix)" + full_popn_treefile)
 
-                tree_dist = get_tree_dist(window_treefile=tree_filename, full_popn_treefile=full_popn_treefile, window_fasta=slice_fasta_filename,
-                                  win_nuc_range=win_nuc_range)
+                # If there is recombination, there may be multiple trees.
+                # Use the full population tree corresponding to slice portion of the genome.
+                for breaks in breaks_to_treefile.keys():
+                    if is_intersect(breaks[0], breaks[1], win_start_nuc_pos_1based_wrt_ref, win_end_nuc_pos_1based_wrt_ref):
+                        full_popn_treefile = breaks_to_treefile[breaks]
+                        tree_dist = get_tree_dist(window_treefile=slice_tree_filename,
+                                                  full_popn_treefile=full_popn_treefile,
+                                                  window_fasta=slice_fasta_filename,
+                                                  win_nuc_range=win_nuc_range)
+
 
                 with open(dnds_tsv_filename, 'rU') as fh_dnds_tsv:
                     reader = csv.DictReader(fh_dnds_tsv, delimiter='\t')
                     for codonoffset_0based, codon_row in enumerate(reader):    # Every codon site is a row in the *.dnds.tsv file
                         nucoffset_0based = codonoffset_0based*Utility.NUC_PER_CODON
                         outrow["CodonSite"] = win_start_codon_1based_wrt_ref + codonoffset_0based
-                        outrow["CodonDepth"] = consensus.get_codon_depth(codon_pos_0based=codonoffset_0based, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
+                        outrow["CodonDepth"] = consensus.get_codon_depth(codon_pos_0based=codonoffset_0based,
+                                                                         is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
                         outrow["AADepth"] = consensus.get_unambig_codon2aa_depth(codon_pos_0based=codonoffset_0based)
-                        outrow["Conserve"] = consensus.get_ave_conserve(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
-                        outrow["Entropy"] = consensus.get_ave_metric_entropy(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
-                        outrow["ConserveTrueBase"] = consensus.get_ave_conserve(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
-                        outrow["EntropyTrueBase"] = consensus.get_ave_metric_entropy(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
+                        outrow["ConserveAllCodon"] = consensus.get_codon_conserve(codonoffset_0based,
+                                                                          is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
+                        outrow["EntropyAllCodon"] = consensus.get_codon_shannon_entropy(codonoffset_0based,
+                                                                                is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
+                        outrow["ConserveCodon"] = consensus.get_codon_conserve(codonoffset_0based,
+                                                                                  is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
+                        outrow["EntropyCodon"] = consensus.get_codon_shannon_entropy(codonoffset_0based,
+                                                                                        is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
                         outrow["N"] = float(codon_row[hyphy_handler.HYPHY_TSV_N_COL])
                         outrow["S"] = float(codon_row[hyphy_handler.HYPHY_TSV_S_COL])
                         outrow["ES"] = float(codon_row[hyphy_handler.HYPHY_TSV_EXP_S_COL])
@@ -207,16 +258,27 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
                         outrow["TreeDepth"] = tree_depth
                         outrow["TreeDist"] = tree_dist
                         writer.writerow(outrow)
+
+                        # double check
+                        if (ns[codonoffset_0based] != (consensus.get_ambig_count(nucoffset_0based) +
+                                                           consensus.get_ambig_count(nucoffset_0based+1) +
+                                                           consensus.get_ambig_count(nucoffset_0based+2))):
+                            raise ValueError("blerrg")
+
             else:
                 for codonoffset_0based in range(total_codons):
                     nucoffset_0based = codonoffset_0based*Utility.NUC_PER_CODON
                     outrow["CodonSite"] = win_start_codon_1based_wrt_ref + codonoffset_0based
                     outrow["CodonDepth"] = consensus.get_codon_depth(codon_pos_0based=codonoffset_0based, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
                     outrow["AADepth"] = consensus.get_unambig_codon2aa_depth(codon_pos_0based=codonoffset_0based)
-                    outrow["Conserve"] = consensus.get_ave_conserve(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
-                    outrow["Entropy"] = consensus.get_ave_metric_entropy(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
-                    outrow["ConserveTrueBase"] = consensus.get_ave_conserve(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
-                    outrow["EntropyTrueBase"] = consensus.get_ave_metric_entropy(nucoffset_0based, nucoffset_0based + Utility.NUC_PER_CODON, is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
+                    outrow["ConserveAllCodon"] = consensus.get_codon_conserve(codonoffset_0based,
+                                                                          is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
+                    outrow["EntropyAllCodon"] = consensus.get_codon_shannon_entropy(codonoffset_0based,
+                                                                            is_count_ambig=True, is_count_gaps=True, is_count_pad=True)
+                    outrow["ConserveCodon"] = consensus.get_codon_conserve(codonoffset_0based,
+                                                                              is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
+                    outrow["EntropyCodon"] = consensus.get_codon_shannon_entropy(codonoffset_0based,
+                                                                                        is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
                     outrow["AmbigBase"] = ns[codonoffset_0based]
                     outrow["Pad"] = pad[codonoffset_0based]
                     outrow["Err"] = seq_err[codonoffset_0based]
@@ -227,6 +289,12 @@ def collect_dnds(output_dir, output_csv_filename, full_popn_fasta, comments=None
                     outrow["TreeLen"] = tree_len
                     outrow["TreeDepth"] = tree_depth
                     writer.writerow(outrow)
+
+                    # double check
+                    if (ns[codonoffset_0based] != (consensus.get_ambig_count(nucoffset_0based) +
+                                                       consensus.get_ambig_count(nucoffset_0based+1) +
+                                                       consensus.get_ambig_count(nucoffset_0based+2))):
+                        raise ValueError("blahhh")
 
 
 def error_by_codonpos(slice_msa_fasta, slice_start_wrt_ref_1based, full_popn_fasta):
@@ -243,7 +311,7 @@ def error_by_codonpos(slice_msa_fasta, slice_start_wrt_ref_1based, full_popn_fas
     seq_err = [0] * total_codons
     err_aa_change = [0] * total_codons
     err_aa_nochange = [0] * total_codons
-    ambig_aa_change = [0] * total_codons  # aa change due to ambiguous base.  Should be 0
+    ambig_aa_change = [0] * total_codons  # aa change due to ambiguous base
     ambig_aa_nochange = [0] * total_codons  # no aa change even though ambiguous base
 
 
@@ -288,14 +356,43 @@ def error_by_codonpos(slice_msa_fasta, slice_start_wrt_ref_1based, full_popn_fas
                     is_codon_has_err = True
                     seq_err[codon_pos_wrt_slice_0based] += 1
 
-            # aa change or no aa-change due to sequence error
-            if is_codon_has_err and Utility.CODON2AA.get(read_codon) and Utility.CODON2AA.get(template_codon):
-                if Utility.CODON2AA.get(read_codon) == Utility.CODON2AA.get(template_codon):
+
+            # If there are both errors and ambiguous/pad bases, then find out the effect of each alone.
+            if is_codon_has_ambig and is_codon_has_err:
+                # Test if ambiguous base alone causes AA change by correcting erroneous bases
+                corrected_read_codon = template_codon
+                for i, read_base in enumerate(read_codon):
+                    if read_base == "N" or read_base == "-":  # keep ambiguous bases
+                        corrected_read_codon = corrected_read_codon[0:i]  + "N" + corrected_read_codon[i+1:]
+
+                if Utility.CODON2AA.get(corrected_read_codon) == Utility.CODON2AA.get(template_codon):
+                    ambig_aa_nochange[codon_pos_wrt_slice_0based] += 1
+                else:
+                    ambig_aa_change[codon_pos_wrt_slice_0based] += 1
+
+                # Test if erroneous bases alone causes AA change by correcting ambiguous bases
+                corrected_read_codon = template_codon
+                for i, read_base in enumerate(read_codon):
+                    # keep erroneous bases
+                    if read_base != template_codon[i] and read_base != "N" and read_base != "-":
+                        corrected_read_codon = corrected_read_codon[0:i]  + read_base + corrected_read_codon[i+1:]
+
+                if Utility.CODON2AA.get(corrected_read_codon) == Utility.CODON2AA.get(template_codon):
                     err_aa_nochange[codon_pos_wrt_slice_0based] += 1
                 else:
                     err_aa_change[codon_pos_wrt_slice_0based] += 1
-            elif is_codon_has_ambig and Utility.CODON2AA.get(read_codon) and Utility.CODON2AA.get(template_codon):
-                if Utility.CODON2AA.get(read_codon) == Utility.CODON2AA.get(template_codon):
+
+            # aa change or no aa-change due to sequence error
+            # CODON2AA doesn't accept codons with gaps.  Convert gaps to Ns.
+            elif is_codon_has_err and Utility.CODON2AA.get(read_codon.replace("-", "N")) and Utility.CODON2AA.get(template_codon):
+                if Utility.CODON2AA.get(read_codon.replace("-", "N")) == Utility.CODON2AA.get(template_codon):
+                    err_aa_nochange[codon_pos_wrt_slice_0based] += 1
+                else:
+                    err_aa_change[codon_pos_wrt_slice_0based] += 1
+
+            # aa change or no aa change due to ambiguous base
+            elif is_codon_has_ambig and Utility.CODON2AA.get(read_codon.replace("-", "N")) and Utility.CODON2AA.get(template_codon):
+                if Utility.CODON2AA.get(read_codon.replace("-", "N")) == Utility.CODON2AA.get(template_codon):
                     ambig_aa_nochange[codon_pos_wrt_slice_0based] += 1
                 else:
                     ambig_aa_change[codon_pos_wrt_slice_0based] += 1
@@ -501,7 +598,7 @@ def collect_dnds_helper(args):
         raise e
     return ret_val
 
-def recollect_dnds_all(all_inferred_dnds_dir, sim_data_dir):
+def recollect_dnds_from_tsv(all_inferred_dnds_dir, sim_data_dir, sim_args_tsv=None):
     """
     Recollects the collate_dnds.csv info for simulated data.
     Only collects the simulated data specified in the sim_args.tsv file.
@@ -510,7 +607,7 @@ def recollect_dnds_all(all_inferred_dnds_dir, sim_data_dir):
     :param sim_data_dir:
     :return:
     """
-    popn_groups, umberjack_group_to_args = simulator.parse_sim_args_tsv()
+    popn_groups, umberjack_group_to_args = simulator.parse_sim_args_tsv(sim_args_tsv)
 
     pool = multiprocessing.Pool(PROCS)
     args_itr = []
@@ -519,8 +616,8 @@ def recollect_dnds_all(all_inferred_dnds_dir, sim_data_dir):
     for umberjackgroup, popn_groups_per_ugroup in umberjack_group_to_args.iteritems():
         for popn_group in popn_groups_per_ugroup:
             sample_ref_outdir = simulator.get_sample_ref_outdir(umberjackgroup, popn_group)
-            #for filename in fnmatch.filter(filenames, "collate_dnds.csv"):
-            for filename in fnmatch.filter(filenames, "actual_dnds_by_site.csv"):
+
+            for filename in fnmatch.filter(filenames, "collate_dnds.csv"):
                 #/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/smTall.cov5.indiv1000.codon500.window350.breadth0.6.depth100.0/consensus/window350/collate_dnds.csv
                 sim_name = os.path.basename(os.path.abspath(dirpath + os.sep + os.pardir + os.sep + os.pardir))
 
@@ -554,12 +651,48 @@ def recollect_dnds_all(all_inferred_dnds_dir, sim_data_dir):
         return inferred_collate_dnds_csvs
 
 
+def recollect_dnds(all_inferred_dnds_dir, sim_data_dir):
+    """
+    Recollects the collate_dnds.csv info for simulated data
+    given the simulated data directory and umberjack output directory.
+    Assumes that the simulated data and umberjack output directory represent the same dataset.
+
+    :param all_inferred_dnds_dir:
+    :param sim_data_dir:
+    :return:
+    """
+
+    LOGGER.debug("Recollecting dataset=" + sim_data_dir + " with umberjack output " + all_inferred_dnds_dir)
+    full_popn_fasta = glob.glob(sim_data_dir + os.sep + "fullpopn" + os.sep + "*_TRUE.fasta")[0]
+
+    inferred_collate_dnds_csv = all_inferred_dnds_dir + os.sep + "collate_dnds.csv"
+    LOGGER.debug("Recollating Inferred collated dnds=" + inferred_collate_dnds_csv)
+    LOGGER.debug("Recollating Sim Full Popn Fasta = " + full_popn_fasta)
+
+    collect_dnds(output_dir=all_inferred_dnds_dir, output_csv_filename=inferred_collate_dnds_csv, sim_data_dir=sim_data_dir)
+
+
+
 if __name__ == "__main__":
+
+    parser = ArgumentParser()
+    parser.add_argument("-d", help="simulated data directory")
+    parser.add_argument("-o", help="simulated data umberjack output directory")
+    parser.add_argument("-t", help="simulated data tsv file")
+
+
+    args = parser.parse_args()
+
     SIM_OUT_DIR = os.path.dirname(os.path.realpath(__file__)) + "/simulations/out"
     SIM_DATA_DIR = os.path.dirname(os.path.realpath(__file__)) + "/simulations/data"
     OUTPUT_INF_EXP_COLLATE_CSV = SIM_OUT_DIR + os.sep + "collate_all.treedist.csv"
-    inferred_collate_dnds_csvs = recollect_dnds_all(all_inferred_dnds_dir=SIM_OUT_DIR, sim_data_dir=SIM_DATA_DIR)
-    make1csv(inferred_dnds_dir=SIM_OUT_DIR, sim_data_dir=SIM_DATA_DIR, output_csv_filename=OUTPUT_INF_EXP_COLLATE_CSV, inferred_collate_dnds_csvs=inferred_collate_dnds_csvs)
+
+    if args.t:
+        inferred_collate_dnds_csvs = recollect_dnds_from_tsv(all_inferred_dnds_dir=SIM_OUT_DIR, sim_data_dir=SIM_DATA_DIR)
+    else:
+        inferred_collate_dnds_csvs = recollect_dnds(all_inferred_dnds_dir=args.o, sim_data_dir=args.d)
+
+    #make1csv(inferred_dnds_dir=SIM_OUT_DIR, sim_data_dir=SIM_DATA_DIR, output_csv_filename=OUTPUT_INF_EXP_COLLATE_CSV, inferred_collate_dnds_csvs=inferred_collate_dnds_csvs)
 
     # LOGGER.debug("About to generate rhtml")
     # Rscript_wdir =  os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep + "R")
