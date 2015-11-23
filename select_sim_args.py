@@ -17,7 +17,7 @@ MAX_SEED = math.pow(2, 32)-1  # internally asg_driver.py used numpy random gener
 SIM_DATA_DIR =  os.path.dirname(os.path.realpath(__file__)) + os.sep + "simulations/data"
 SIM_FIELD_RANGE_CSV = "./sim_config/sim_args_range.csv"
 SIM_ARGS_TSV = "./sim_config/sim_args.tsv"  # a tsv that specifies the actual field values for each simulated dataset
-NUM_DATASETS = 10
+NUM_DATASETS = 12
 
 LONGSHOT_ART_PROFILE = os.path.abspath(os.path.dirname(__file__) + os.sep + "art_profiles" + os.sep +  "longshot_ART_profile.")
 CODON_SITES = 300
@@ -45,7 +45,9 @@ LHS_FIELDS = ["Cover",  # fraction of individuals covered by a read
               "MinWinWidth",  # fraction of window size required to have true base in sequence
               "MinWinDepth",  # fraction of indiv, or fraction of coverage, whichever is smaller
               "MinQual",
-              "Breakpoints"   # total recombination breakpoints in genome
+              "NumBreakpoints",   # total recombination breakpoints in genome
+              "Generations",
+              "SelectionRate"
 ]
 
 LHS_MUTRATE_FIELDS = ["TreeLen"]  # total substitutions/site for full population tree
