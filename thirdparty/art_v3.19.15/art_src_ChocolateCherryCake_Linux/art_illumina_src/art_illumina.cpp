@@ -611,7 +611,7 @@ int main(int argc, char* argv[]){
 				t_num_read= 2*read_count;
 			}
 			else{
-				t_num_read= static_cast<unsigned long>(a_art.ref_seq.size()/read_len*x_fold);
+				t_num_read= static_cast<unsigned long>(a_art.ref_seq.size() * x_fold/read_len);
 				if(amplicon){ t_num_read = 2*(long) x_fold; }
 			}
 			while(t_num_read>0){
