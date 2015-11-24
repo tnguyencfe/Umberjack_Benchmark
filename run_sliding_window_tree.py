@@ -410,14 +410,14 @@ def gen_sim_data(config_file,
 
 
 
-def process_window_size_helper((popn_umberjack_index, umberjack_group, popn_groups)):
+def process_window_size_helper((popn_umberjack_index, concur_mpi, umberjack_group, popn_groups)):
     """
     Helper function to call process_window_size with dict as args
     :param args:
     :return:
     """
     # use 0-based popn_umberjack_index to decide which machines to run on
-    machine_file_index = popn_umberjack_index % CONCURRENT_MPIRUN
+    machine_file_index = popn_umberjack_index % concur_mpi
 
     machine_file = SIM_OUT_DIR + os.sep + "machine{}.txt".format(machine_file_index)
 
@@ -616,7 +616,7 @@ def parse_sim_args_tsv(sim_args_tsv=None):
             popsize = int(row["PopSize"])
             codonsites = int(row["CodonSites"])
 
-            breakpoints_s = row["Breakpoints"]
+            breakpoints_s = row["Breakpoints"] if "Breakpoints" in row else None
             if breakpoints_s:
                 breakpoints = [int(x) for x in breakpoints_s.split(",")]
             else:
@@ -676,9 +676,13 @@ def parse_sim_args_tsv(sim_args_tsv=None):
 if __name__ == "__main__":
 
     sim_args_tsv = sys.argv[1]
+    concur_mpi = CONCURRENT_MPIRUN
+    if len(sys.argv) >= 2:
+        concur_mpi = int(sys.argv[2])
+
     popn_groups, umberjack_group_to_popn = parse_sim_args_tsv(sim_args_tsv=sim_args_tsv)
 
-    thepool =  pool_traceback.LoggingPool(processes=CONCURRENT_MPIRUN)
+    thepool =  pool_traceback.LoggingPool(processes=concur_mpi)
     for result in thepool.imap_unordered(gen_sim_data_helper, popn_groups):
             pass
 
@@ -688,10 +692,10 @@ if __name__ == "__main__":
     # Let umberjack do the mpi distribution.  Just give it a list of samfiles
     # For each umberjack mpi run, we need to cluster the simulations with the same wnidow breadth and window depth,
     # since each umberjack run allows only 1 breadth & wdepth thresholds, but allows for multiple samfiles.
-    thepool =  pool_traceback.LoggingPool(processes=CONCURRENT_MPIRUN)
+    thepool =  pool_traceback.LoggingPool(processes=concur_mpi)
     args_itr = []
     for i, (umbjerack_group, pgroups_per_umberjack) in enumerate(umberjack_group_to_popn.iteritems()):
-        args_itr.append((i, umbjerack_group, pgroups_per_umberjack))
+        args_itr.append((i, concur_mpi, umbjerack_group, pgroups_per_umberjack))
     for result in thepool.imap_unordered(process_window_size_helper, args_itr):
         pass
     thepool.close()
