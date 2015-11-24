@@ -12,6 +12,8 @@ import math
 
 MAX_SEED = math.pow(2, 32)-1  # internally asg_driver.py used numpy random generator which can only take up to 32bit seeds
 
+MATE_LEN_BP = 251
+
 # a csv that specifies the ranges for fields dictating a simulated dataset
 # Use the ranges to randomly pick field values for each simulated dataset
 SIM_DATA_DIR =  os.path.dirname(os.path.realpath(__file__)) + os.sep + "simulations/data"
@@ -173,19 +175,38 @@ with open(SIM_ARGS_TSV, 'w')  as fh_out:
         # In the sim_args_ranges.tsv file, MinWinDepth is set to the fraction of that highest possible threshold.
 
 
-        # Find the fraction of reads that exceed the window breadth threshold
+        # Find the fraction of fragments that exceed the window breadth threshold
         min_win_width_bp = int(outrow["MinWinWidth"] * outrow["WindowSize"])
         frag_ave = outrow["FragLenAve"]
         frag_std = outrow["FragLenStd"]
-        prob_exceed_width_thresh = 1 - scipy.stats.norm.cdf(x=min_win_width_bp, loc=frag_ave, scale=frag_std)
+
+        # When the fragment size is longer than 2xmate length, there will be a gap between the mates.
+        # That gap shouldn't be bigger than the max allowable gap
+        max_gap_bp = outrow["WindowSize"] - min_win_width_bp
+        max_frag_len_fit_win = 2 * MATE_LEN_BP + max_gap_bp
+
+
+        # Find the probability of a window starting at a position in the fragments such that the fragment
+        # passes the window breadth threshold.
+        # P(fragment fits window) = sum over fragment size {P(fragment fits window | fragment size) * P (fragment size)}
+        p_frag_fit_win = 0.0
+        for frag_size in xrange(min_win_width_bp, max_frag_len_fit_win):
+            # the fraction of window start positions wrt fragment that allow the fragment to fit in the window
+            p_frag_fits_win_given_fragsize = (frag_size - min_win_width_bp + 1.0)/float(frag_size)
+            p_fragsize = scipy.stats.norm.pdf(x=frag_size, loc=frag_ave, scale=frag_std)
+            p_frag_fit_win += p_frag_fits_win_given_fragsize * p_fragsize
+
 
         # Find the highest possible window depth threshold that makes sense
         popsize = outrow["PopSize"]
-        cov_depth = outrow["Cover"]
+        cov_depth = outrow["Cover"]  # how many times each genome is covered per individual
+
+
+        # At 1x coverage, we expect a fragment covering each site for each individual
         if cov_depth >= 1:
-            highest_win_depth_thresh = prob_exceed_width_thresh * popsize
+            highest_win_depth_thresh = p_frag_fit_win * popsize
         else:
-            highest_win_depth_thresh = prob_exceed_width_thresh * cov_depth * popsize
+            highest_win_depth_thresh = p_frag_fit_win * cov_depth * popsize
 
         fraction_win_depth_thresh = outrow["MinWinDepth"]
         min_win_read_depth = int(fraction_win_depth_thresh * highest_win_depth_thresh)
