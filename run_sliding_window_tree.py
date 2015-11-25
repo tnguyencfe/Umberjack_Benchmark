@@ -62,9 +62,9 @@ PopnGroup = namedtuple("PopnGroup", field_names=["dataset", "art_profile", "conf
 UmberjackGroup = namedtuple("UmberjackGroup", field_names=["window_size", "min_win_width", "min_win_depth", "min_qual"])
 
 
-def get_sample_ref_outdir(popn_group, umberjack_group):
+def get_umberjack_outdir_from_simargs_tsv(popn_group, umberjack_group):
     """
-    Gets the umberjack output directory
+    Gets the umberjack output directory for the dataset as specifed in run_sliding_window_tree.py in the input_csv file
     :param popn_group:
     :param umberjack_group:
     :return:
@@ -76,11 +76,9 @@ def get_sample_ref_outdir(popn_group, umberjack_group):
                                                             umberjack_group.min_win_depth,
                                                             umberjack_group.min_qual))
 
-    sample_ref_out_dir = (OUT_DIR + os.sep +
-                                  popn_group.dataset + ".reads.bwa.sort.query" + os.sep +
-                                  "consensus")
+    sample_out_dir = (OUT_DIR + os.sep + popn_group.dataset )
 
-    return sample_ref_out_dir
+    return sample_out_dir
 
 
 def get_sim_dataset_dir(popn_group):
