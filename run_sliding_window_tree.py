@@ -1,24 +1,15 @@
 import os
 import subprocess
-import shutil
 import glob
 import re
 import logging
 import random
 import sys
 import Bio.SeqIO as SeqIO
-import Bio.Phylo as Phylo
 import csv
 from pool import pool_traceback
-import Utility
-import collect_stats
 import config.settings as settings
-import sam.sam_handler
-from test.test_topology import TestTopology
-import tempfile
-import slice_miseq
 from collections import namedtuple
-import scipy.stats
 import math
 
 settings.setup_logging()
@@ -149,34 +140,34 @@ def do_sliding_window(outdir, input_csv,
 
 
 
-def do_collate(outdir, output_csv, ref_fasta, full_popn_fasta,expected_dnds_filename, indelible_dnds_filename,
-               full_popn_conserve_csv, orig_conserve_csv, aln_conserve_csv):
-
-    collect_stats.collect_dnds(output_dir=outdir, output_csv_filename=output_csv, full_popn_fasta=full_popn_fasta)
-
-    # Rscript_wdir =  os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep + "R")
-    #
-    # rcollate_config_file = Rscript_wdir + os.sep + "aggreg_window.config"
-    # with open(rcollate_config_file, 'w') as fh_out_config:
-    #     fh_out_config.write("COLLATE_DNDS_FILENAME=" + output_csv + "\n")
-    #     fh_out_config.write("EXPECTED_DNDS_FILENAME=" + expected_dnds_filename + "\n")
-    #     fh_out_config.write("EXPECTED_DNDS_START_NUC_POS=" + str(START_NUCPOS) + "\n")
-    #     fh_out_config.write("EXPECTED_DNDS_END_NUC_POS=" + str(ref_len) + "\n")
-    #     fh_out_config.write("INDELIBLE_DNDS_FILENAME=" + indelible_dnds_filename + "\n")
-    #     fh_out_config.write("SMOOTH_DIST=" + str(SMOOTH_DIST) + "\n")
-    #     fh_out_config.write("FULL_POPN_CONSERVE_CSV=" + full_popn_conserve_csv + "\n")
-    #     fh_out_config.write("ORIG_CONSERVE_CSV=" + orig_conserve_csv + "\n")
-    #     fh_out_config.write("ALN_CONSERVE_CSV=" + aln_conserve_csv + "\n")
-
-    
-    # subprocess.check_call(["Rscript", "-e",
-    #                        ("library(knitr); " +
-    #                         "setwd('{}'); ".format(Rscript_wdir) +
-    #                         "spin('aggreg_window.R', knit=FALSE); " +
-    #                         "knit2html('./aggreg_window.Rmd', stylesheet='./markdown_bigwidth.css')")],
-    #                       shell=False, env=os.environ)
-    # shutil.copy(Rscript_wdir + os.sep + "aggreg_window.html",
-    #             outdir + os.sep + "aggreg_window.html")
+# def do_collate(outdir, output_csv, ref_fasta, full_popn_fasta,expected_dnds_filename, indelible_dnds_filename,
+#                full_popn_conserve_csv, orig_conserve_csv, aln_conserve_csv):
+#
+#     # collect_stats.collect_dnds(output_dir=outdir, output_csv_filename=output_csv, full_popn_fasta=full_popn_fasta)
+#
+#     # Rscript_wdir =  os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep + "R")
+#     #
+#     # rcollate_config_file = Rscript_wdir + os.sep + "aggreg_window.config"
+#     # with open(rcollate_config_file, 'w') as fh_out_config:
+#     #     fh_out_config.write("COLLATE_DNDS_FILENAME=" + output_csv + "\n")
+#     #     fh_out_config.write("EXPECTED_DNDS_FILENAME=" + expected_dnds_filename + "\n")
+#     #     fh_out_config.write("EXPECTED_DNDS_START_NUC_POS=" + str(START_NUCPOS) + "\n")
+#     #     fh_out_config.write("EXPECTED_DNDS_END_NUC_POS=" + str(ref_len) + "\n")
+#     #     fh_out_config.write("INDELIBLE_DNDS_FILENAME=" + indelible_dnds_filename + "\n")
+#     #     fh_out_config.write("SMOOTH_DIST=" + str(SMOOTH_DIST) + "\n")
+#     #     fh_out_config.write("FULL_POPN_CONSERVE_CSV=" + full_popn_conserve_csv + "\n")
+#     #     fh_out_config.write("ORIG_CONSERVE_CSV=" + orig_conserve_csv + "\n")
+#     #     fh_out_config.write("ALN_CONSERVE_CSV=" + aln_conserve_csv + "\n")
+#
+#
+#     # subprocess.check_call(["Rscript", "-e",
+#     #                        ("library(knitr); " +
+#     #                         "setwd('{}'); ".format(Rscript_wdir) +
+#     #                         "spin('aggreg_window.R', knit=FALSE); " +
+#     #                         "knit2html('./aggreg_window.Rmd', stylesheet='./markdown_bigwidth.css')")],
+#     #                       shell=False, env=os.environ)
+#     # shutil.copy(Rscript_wdir + os.sep + "aggreg_window.html",
+#     #             outdir + os.sep + "aggreg_window.html")
 
 def filter_fasta(in_fasta, keep_names, out_fasta):
     """
