@@ -19,9 +19,11 @@ MATE_LEN_BP = 251
 SIM_DATA_DIR =  os.path.dirname(os.path.realpath(__file__)) + os.sep + "simulations/data"
 SIM_FIELD_RANGE_CSV = "./sim_config/sim_args_range.csv"
 SIM_ARGS_TSV = "./sim_config/sim_args.tsv"  # a tsv that specifies the actual field values for each simulated dataset
-NUM_DATASETS = 12
+NUM_DATASETS = 15
 
-LONGSHOT_ART_PROFILE = os.path.abspath(os.path.dirname(__file__) + os.sep + "art_profiles" + os.sep +  "longshot_ART_profile.")
+# Use path relative to directory of simulated dataset config file
+# /Umberjack_Benchmark/simulations/data/SimDataset/SimDataset.config
+LONGSHOT_ART_PROFILE = os.pardir + os.sep + os.pardir + os.sep + os.pardir + os.sep + "art_profiles" + os.sep +  "longshot_ART_profile."
 CODON_SITES = 300
 POPN_SIZE = 1000
 SIM_DATASET_NAME_PREFIX = "Sim"
