@@ -405,7 +405,7 @@ def process_window_size_helper((popn_umberjack_index, concur_mpi, umberjack_grou
     # use 0-based popn_umberjack_index to decide which machines to run on
     machine_file_index = popn_umberjack_index % concur_mpi
 
-    machine_file = SIM_OUT_DIR + os.sep + "machine{}.txt".format(machine_file_index)
+    machine_file = SIM_OUT_DIR + os.sep + "machine_{}.txt".format(machine_file_index)
 
     # Convert UmberjackGroup namedtuple into dict so that we can convert into keyword args
     kwargs = umberjack_group._asdict()
@@ -667,18 +667,17 @@ def mpi_create_datasets(sim_args_tsv):
     :return:
     """
     mpi_sim_pipeline_exe = os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep + "mpi_sim_pipeline.py")
-    all_nodes_machine_file = os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep +
-                                             "simulations" + os.sep + "out" + os.sep + "machineall.txt")
+    sim_pipeline_machine_file = SIM_DATA_DIR + os.sep + "machine_sim_pipeline.txt"
 
     sim_data_logdir = SIM_DATA_DIR + os.sep + "logs"
     if not os.path.exists(sim_data_logdir):
         os.makedirs(sim_data_logdir)
 
-    current_exe_prefix = os.path.splitext(os.path.basename(os.path.realpath(__file__)))[0]
-    mpi_log = sim_data_logdir + os.sep + current_exe_prefix + ".log"
+
+    mpi_log = sim_data_logdir + os.sep + "mpi_sim_pipeline.log"
 
     subprocess.check_call(["mpirun",
-                           "--machinefile", all_nodes_machine_file,
+                           "--machinefile", sim_pipeline_machine_file,
                            "--output-filename", mpi_log,
                            "python",
                            mpi_sim_pipeline_exe,
