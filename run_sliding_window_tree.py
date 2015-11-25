@@ -14,7 +14,7 @@ import Utility
 import collect_stats
 import config.settings as settings
 import sam.sam_handler
-from test_topology import TestTopology
+from test.test_topology import TestTopology
 import tempfile
 import slice_miseq
 from collections import namedtuple
