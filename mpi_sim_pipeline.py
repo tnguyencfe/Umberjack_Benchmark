@@ -9,6 +9,13 @@ import os
 import csv
 import subprocess
 import sys
+import logging
+import config.settings
+
+config.settings.setup_logging()
+
+LOGGER = logging.getLogger(__name__)
+
 
 # Get the simulation datasets from Umberjack_Benchmark/sim_config/sim_args.tsv
 SIM_ARGS_TSV = os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep + "sim_config" + os.sep + "sim_args.tsv")
@@ -18,6 +25,8 @@ SIM_PIPELINE_EXE = os.path.abspath(os.path.dirname(os.path.realpath(__file__)) +
 
 my_rank = MPI.COMM_WORLD.Get_rank()
 nprocs = MPI.COMM_WORLD.Get_size()
+
+LOGGER.debug("I am rank " + str(my_rank) + " of " + str(nprocs))
 
 if len(sys.argv) < 2:
     sim_args_tsv = SIM_ARGS_TSV
