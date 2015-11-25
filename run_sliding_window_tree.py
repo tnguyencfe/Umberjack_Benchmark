@@ -392,11 +392,6 @@ def gen_sim_data(config_file,
             fh_out.write("HYPHY_EXE = ../../../../SlidingWindow/test/simulations/bin/hyphy/hyphy_2.2.3/linux_x64/HYPHYMP\n")
             fh_out.write("HYPHY_BASEPATH = ../../../../SlidingWindow/test/simulations/bin/hyphy/hyphy_2.2.3/res/TemplateBatchFiles\n")
 
-        # simulations/data/dataset/subs/dataset.dnds.tsv
-
-        sim_pipeline_exe = os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep + os.pardir + os.sep + "SlidingWindow/test/simulations/sim_pipeline.py")
-        subprocess.check_call(["python", sim_pipeline_exe, config_file])
-
 
 
 
@@ -664,6 +659,31 @@ def parse_sim_args_tsv(sim_args_tsv=None):
     return popn_groups, umberjack_group_to_popn
 
 
+
+def mpi_create_datasets(sim_args_tsv):
+    """
+    Calls mpi_sim_pipeline.py.
+    Assumes that the dataset config files have already been created.
+    :return:
+    """
+    mpi_sim_pipeline_exe = os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep + "mpi_sim_pipeline.py")
+    all_nodes_machine_file = os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + os.sep +
+                                             "simulations" + os.sep + "out" + os.sep + "machineall.txt")
+
+    sim_data_logdir = SIM_DATA_DIR + os.sep + "logs"
+    if not os.path.exists(sim_data_logdir):
+        os.makedirs(sim_data_logdir)
+
+    current_exe_prefix = os.path.splitext(os.path.basename(os.path.realpath(__file__)))[0]
+    mpi_log = sim_data_logdir + os.sep + current_exe_prefix + ".log"
+
+    subprocess.check_call(["mpirun",
+                           "--machinefile", all_nodes_machine_file,
+                           "--output-filename", mpi_log,
+                           "python",
+                           mpi_sim_pipeline_exe,
+                           sim_args_tsv])
+
 if __name__ == "__main__":
 
     sim_args_tsv = sys.argv[1]
@@ -676,8 +696,10 @@ if __name__ == "__main__":
     thepool =  pool_traceback.LoggingPool(processes=concur_mpi)
     for result in thepool.imap_unordered(gen_sim_data_helper, popn_groups):
             pass
-
     thepool.close()
+    mpi_create_datasets(sim_args_tsv)
+
+
 
 
     # Let umberjack do the mpi distribution.  Just give it a list of samfiles
