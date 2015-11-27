@@ -72,13 +72,6 @@ def get_umberjack_outdir_from_simargs_tsv(popn_group, umberjack_group):
     return sample_out_dir
 
 
-def get_sim_dataset_dir(popn_group):
-    """
-    For the given simulated dataset, return its directory
-    :param popn_group:
-    :return:
-    """
-    return SIM_DATA_DIR + os.sep + popn_group.dataset
 
 
 def do_sliding_window(outdir, input_csv,
