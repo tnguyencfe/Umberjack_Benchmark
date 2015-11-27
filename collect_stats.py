@@ -48,6 +48,23 @@ def get_tree_len_depth(treefilename):
     return unroot_tree_len, longest_depth
 
 
+def get_break_ratio(sim_data, win_start, win_end):
+    """
+    :param SimData sim_data: simulated data instance
+    :param int win_start:  1-based window nucleotide start
+    :param int win_end:  1based window nucleotide end
+    :return float: sum of (min bases on one side of breakpoint / bases on other side of breakpoint) across all breakpoint in window
+    """
+    break_ratio = 0.0
+    for (recomb_start, recomb_end) in sim_data.get_recombo_breaks():
+        if win_start <= recomb_start <= win_end:  # breakpoint within window
+            # breakpoint is the 1-based nucleotide position of start of the strand switch
+            left = recomb_start - win_start
+            right = win_end - recomb_start + 1.0
+            break_ratio += min(left, right)/max(left, right)
+    return break_ratio
+
+
 
 
 def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None):
@@ -81,7 +98,8 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
                                             "EN",  # Expected Nonsynonymous substitutions
                                             "ES",  # Expected Synonymous substitutions
                                             "dN", "dS",
-                                            "dN_minus_dS", # dN-dS scaled by the total substitutions at the codon site
+                                            "dN_minus_dS", # dN-dS scaled by the tree length
+                                            "unscaled_dN_minus_dS", # dN-dS
                                             "Ambig",  # N nucleotide
                                             "Pad", # left or right pad gap
                                             "Gap",   # internal gap between true bases on both sides
@@ -93,7 +111,8 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
                                             "TreeLen",  # Tree length
                                             "TreeDepth", # deepest tip to root distance
                                             "TreeDist",  # distance from actual to expected tree
-                                            "Is_Break"  # Whether a strand switch starts on this codon site
+                                            "Is_Break",  # Whether a strand switch starts on this codon site
+                                            "BreakRatio",  # sum across window breakpoints (ratio of bases on either side of breakpoint)
                                 ]
         )
         writer.writeheader()
@@ -115,7 +134,9 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
             win_start_nuc_pos_1based_wrt_ref, win_end_nuc_pos_1based_wrt_ref = [int(x) for x in win_nuc_range.split('_')]
             # Window starts at this 1-based codon position with respect to the reference
             win_start_codon_1based_wrt_ref = win_start_nuc_pos_1based_wrt_ref/Utility.NUC_PER_CODON + 1
-            
+
+            break_ratio = get_break_ratio(sim_data=sim_data, win_start=win_start_nuc_pos_1based_wrt_ref, win_end=win_end_nuc_pos_1based_wrt_ref)
+
             tree_len = None
             tree_depth = None
             tree_dist = None
@@ -190,19 +211,22 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
                         if len(full_popn_breaks) > 1 and outrow["CodonSite"] > 1 and outrow["CodonSite"] == strand_start:
                             outrow["Is_Break"] = 1
 
+                    outrow["BreakRatio"] = break_ratio
+
                     if reader:
                         dnds_info = reader.next()  # Every codon site is a row in the *.dnds.tsv file
                         if codonoffset_0based != int(dnds_info["Site"]):
                             # dnds tsv specified the codon site in 0-based coordinates in Site field wrt Slice
                             raise ValueError("Inconsistent site numbering " + str(codonoffset_0based) + " in " + dnds_tsv_filename)
 
-                        outrow["N"] = float(dnds_info[hyphy_handler.HYPHY_TSV_N_COL])
-                        outrow["S"] = float(dnds_info[hyphy_handler.HYPHY_TSV_S_COL])
-                        outrow["ES"] = float(dnds_info[hyphy_handler.HYPHY_TSV_EXP_S_COL])
-                        outrow["EN"] = float(dnds_info[hyphy_handler.HYPHY_TSV_EXP_N_COL])
-                        outrow["dN"] = float(dnds_info[hyphy_handler.HYPHY_TSV_DN_COL])
-                        outrow["dS"] = float(dnds_info[hyphy_handler.HYPHY_TSV_DS_COL])
-                        outrow["dN_minus_dS"] = float(dnds_info[hyphy_handler.HYPHY_TSV_SCALED_DN_MINUS_DS_COL])
+                        outrow["N"] = dnds_info[hyphy_handler.HYPHY_TSV_N_COL]
+                        outrow["S"] = dnds_info[hyphy_handler.HYPHY_TSV_S_COL]
+                        outrow["ES"] = dnds_info[hyphy_handler.HYPHY_TSV_EXP_S_COL]
+                        outrow["EN"] = dnds_info[hyphy_handler.HYPHY_TSV_EXP_N_COL]
+                        outrow["dN"] = dnds_info[hyphy_handler.HYPHY_TSV_DN_COL]
+                        outrow["dS"] = dnds_info[hyphy_handler.HYPHY_TSV_DS_COL]
+                        outrow["dN_minus_dS"] = dnds_info[hyphy_handler.HYPHY_TSV_SCALED_DN_MINUS_DS_COL]
+                        outrow["unscaled_dN_minus_dS"] = dnds_info[hyphy_handler.HYPHY_TSV_DN_MINUS_DS_COL]
 
                     writer.writerow(outrow)
 
@@ -352,6 +376,7 @@ def make1csv(output_csv_filename, sim_args_tsv):
                                                     "CodonSite",
                                                     "File",
                                                     "Is_Break",  # whether the site is a recombinant breakpoint (start of new strand)
+                                                    "BreakRatio.Act",  # sum across breakpoints (ratio of bases on either side of breakpoint)
                                                     "Reads.Act", # max read depth for entire slice
                                                     "UnambigCodonRate.Act", # Total unambiguous codon (depth) at the codon site / max read depth for entire slice
                                                     "AADepth.Act",  # Total codons that code for only 1 amino acid at the codon site
@@ -366,7 +391,8 @@ def make1csv(output_csv_filename, sim_args_tsv):
                                                     "dN_minus_dS.Act",
                                                     "TreeLen.Act",  # length of window tree in nucleotide subs/site
                                                     "TreeDepth.Act",  # depth of longest branch in nucleotide subs/site
-                                                    "TreeDist.Act", # distance from actual to expected tree in Robinson Foulds
+                                                    # distance from actual to expected tree in Robinson Foulds-branch lengths /reads
+                                                    "TreeDistPerRead.Act",
                                                     "ConserveCodon.Exp",
                                                     "EntropyCodon.Exp",
                                                     "N.Exp", "S.Exp",
@@ -383,7 +409,10 @@ def make1csv(output_csv_filename, sim_args_tsv):
             for popn_group in popn_groups_per_ugroup:
                 # /home/thuy/gitrepo/Umberjack_Benchmark/simulations/data/simdatasetname
                 sim_popn_name = popn_group.dataset
-                sim_data_dir = simulator.get_sim_dataset_dir(popn_group)
+                sim_data = SimData(popn_group.config_file)
+                sim_data_dir = sim_data.sim_data_dir
+
+
 
                 #/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/window350.breadth0.6.depth100.0.qual20/simdatasetname/consensus/collate_dnds.csv
                 sam_ref_outdir = simulator.get_umberjack_outdir_from_simargs_tsv(popn_group=popn_group, umberjack_group=umberjackgroup)
@@ -446,8 +475,10 @@ def make1csv(output_csv_filename, sim_args_tsv):
                             outrow["dN_minus_dS.Act"] = row["dN_minus_dS"]
                         outrow["TreeLen.Act"] = row["TreeLen"]
                         outrow["TreeDepth.Act"] = row["TreeDepth"]
-                        outrow["TreeDist.Act"] = row["TreeDist"]
+                        if row["TreeDist"]:
+                            outrow["TreeDistPerRead.Act"] = float(row["TreeDist"])/float(row["Reads"])
                         outrow["Is_Break"] = row["Is_Break"]
+                        outrow["BreakRatio.Act"] = row["BreakRatio"]
 
 
                         if not codonsite_2_full_cons.get(codonsite):
