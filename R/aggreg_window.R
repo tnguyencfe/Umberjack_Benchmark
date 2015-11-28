@@ -565,7 +565,7 @@ kable(corr_vals, format="html", caption="Concordance Correlation")
 plot_table_corr_by_div <- function(nowindow_leaf_diversity) {
   
   nowindow_leaf_diversity$EntropyCodonBin <- cut(nowindow_leaf_diversity$EntropyCodon, 
-                                            breaks=seq(0, max(nowindow_leaf_diversity$EntropyCodon, na.rm=TRUE)+0.1, 0.1),
+                                            breaks=5,
                                             include.lowest = TRUE, right=FALSE)
   full_div_combo <- merge(x=fullDat, 
                           y=subset(nowindow_leaf_diversity, select=c(CodonSite, EntropyCodon, EntropyCodonBin)), 
