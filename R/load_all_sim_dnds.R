@@ -3,62 +3,172 @@ library(plyr)
 
 PSEUDOCOUNT <- 1e-7
 
+NUM_RESP_NAMES <- c("LOD_dNdS", "Dist_dn_minus_dS", "AbsLOD_dNdS", "AbsDist_dn_minus_dS", "SqDist_dn_minus_dS")
+CAT_RESP_NAMES <- c("CrapLOD", "CrapDist")
+
+# All numeric varaibles
+NUM_NAMES <- colnames(dnds[sapply(dnds,is.numeric)])
+
+# Numeric variables that might affect Umberjack accuracy
+COVAR_NAMES <- NUM_NAMES[!NUM_NAMES %in% 
+                           c(NUM_RESP_NAMES,
+                             "dNdS.Act", "dNdS.Exp", "dN_minus_dS.Act", "dN_minus_dS.Exp", 
+                             # In separate analysis, conservation and entropy are highly correlated.
+                             # When we use speedglm, it bugs out after it removes highly correlated variables.
+                             # So we do it for them.
+                             "ConserveCodon.Act", "ConserveCodon.Exp", "Window_Conserve.Act",
+                             #"UnambigCodonRate.Act", 
+                             #"Window_UnambigCodonRate.Act",
+                             # These are highly correlated with N, S
+                             "Subst.Act", "Subst.Exp",
+                             "EN.Exp", "ES.Exp", "EN.Act", "ES.Act",
+                             "Window_Start", "Window_End", "CodonSite", "Reads.Act", "PopSize.Act", "Is_Break"
+                           )
+                         ]
+
+# These variables apply to the entire window not just a window-codon site
+WINDOW_COVAR_NAMES <- c("BreakRatio.Act", "TreeLen.Act", "TreeDepth.Act", "TreeDistPerRead.Act", "Cov.Act",
+                        "Window_Entropy.Act", "Window_UnambigCodonRate.Act", "Window_ErrPerCodon.Act", "Window_Subst.Act")
+
+# These variables apply only to specific window-codon site
+WINDOW_SITE_COVAR_NAMES <- COVAR_NAMES[!COVAR_NAMES %in% WINDOW_COVAR_NAMES]
+
+# categorical variables
+CAT_COVAR_NAMES <- c("IsLowSubst.Act")
+
+# variables used in linear regression
+LM_COVAR_NAMES <- c(CAT_COVAR_NAMES, COVAR_NAMES)
+
+
+nice <- function(name) {
+  if (name == "IsLowSubst.Act") {
+    return ("Only Ambig Window Phylogney Subs")
+  } else if (name == "BreakRatio.Act") {
+    return ("Metric of window breakpoints & \ncloseness to centre of window")
+  } else if (name == "UnambigCodonRate.Act") {
+    return ("Window-Site Unambiguous Codons Per Read")
+  } else if (name == "AADepth.Act") {
+    return ("Window-Site Unambiguous AA Per Read")
+  } else if (name == "EntropyCodon.Act") {
+    return ("Window-Site Codon Entropy")
+  } else if (name == "UnknownPerCodon.Act") {
+    return ("Window-Site Unknown Bases Per Codon")
+  } else if (name == "ErrPerCodon.Act") {
+    return ("Window-Site Erroneously Sequenced Bases Per Codon")
+  } else if (name == "N.Act") {
+    return ("Window-Site Nonsyn subs")
+  } else if (name == "S.Act") {
+    return ("Window-Site Syn subs")
+  } else if (name == "TreeLen.Act") {
+    return ("Window Tree Length (Subs/Site)")
+  } else if (name == "TreeDepth.Act") {
+    return ("Window Tree Depth (Subs/Site)")
+  } else if (name == "TreeDistPerRead.Act") {
+    return ("Ave Robinson Foulds (Window Tree, Expected Tree) \n Weighted By Genome Width Covered By Expected Tree\nNormalized by Total Reads")
+  } else if (name == "EntropyCodon.Exp") {
+    return ("True Population Site Codon Entropy")
+  } else if (name == "N.Exp") {
+    return ("True Population Site Nonsyn Subs")
+  } else if (name == "S.Exp") {
+    return ("True Population Site Syn Subs")
+  } else if (name == "Cov.Act") {
+    return ("Window Read Coverage Per Individual")
+  } else if (name == "Window_Entropy.Act") {
+    return ("Codon Entropy Ave Across Window")
+  } else if (name == "Window_UnambigCodonRate.Act") {
+    return ("Unambig Codons Per Read Ave Across Window")
+  } else if (name == "Window_ErrPerCodon.Act") {
+    return ("Erroneously Sequenced Bases Per Codon Ave Across Window")
+  } else if (name == "Window_Subst.Act") {
+    return ("Phylogeny-Site Substitutions Ave Across Window")
+  } else if (name == "LOD_dNdS") {
+    return ("log2(inferred window site dn/ds) - log2(expected site dn/ds)")
+  } else if (name == "Dist_dn_minus_dS") {
+    return ("(inferred window site dn-ds) - (expected site dn-ds)")
+  } else if (name == "AbsLOD_dNdS") {
+    return ("|log2(inferred window site dn/ds) - log2(expected site dn/ds)|")
+  } else if (name == "AbsDist_dn_minus_dS") {
+    return ("|(inferred window site dn-ds) - (expected site dn-ds)|")
+  } else if (name == "SqDist_dn_minus_dS") {
+    return ("[(inferred window site dn-ds) - (expected site dn-ds)]^2")
+  } else if (name == "WinAbsLOD_dNdS") {
+    return ("|log2(inferred window site dn/ds) - log2(expected site dn/ds)| \n Ave Across Window")
+  } else if (name == "WinAbsDist_dn_minus_dS") {
+    return ("|(inferred window site dn-ds) - (expected site dn-ds)|\nAve Across Window")
+  } else if (name == "WinSqDist_dn_minus_dS") {
+    return ("[(inferred window site dn-ds) - (expected site dn-ds)] ^2\n Ave Across Window")
+  }
+}
+  
+  
 get_all_sim_dnds <- function() {
-  DNDS_FILENAME <- "../simulations/out/collate_all.treedist.csv"
+  #DNDS_FILENAME <- "../simulations/out/collate_all.treedist.csv"
+  DNDS_FILENAME <- "../simulations/out/collate_all.treedist.smallish.csv"
   #DNDS_FILENAME <- "../simulations/out/collate_all.csv"
   
+  # Window_Start,Window_End,CodonSite,File,Is_Break,Reads.Act,UnambigCodonRate.Act,AADepth.Act,
+  #PopSize.Act,ConserveCodon.Act,EntropyCodon.Act,UnknownPerCodon.Act,ErrPerCodon.Act,N.Act,S.Act,EN.Act,ES.Act,
+  #dNdS.Act,dN_minus_dS.Act,TreeLen.Act,TreeDepth.Act,TreeDistPerRead.Act,ConserveCodon.Exp,EntropyCodon.Exp,
+  #N.Exp,S.Exp,EN.Exp,ES.Exp,dNdS.Exp,dN_minus_dS.Exp
   dnds <- read.table(DNDS_FILENAME, header=TRUE, sep=",", na.strings=c("", "None"))
-  dim(dnds)
-  summary(dnds)
-  head(dnds)
-  #dnds$ErrBaseRate.Act <- dnds$ErrBase.Act/dnds$Reads.Act  # per-window-codonsite-read nucleotide errors
-  #dnds$AmbigPadBaseRate.Act <- dnds$AmbigPadBase/dnds$Reads.Act  # per-window-codonsite-read nucleotide N's or gaps
-  #dnds$UnambigCodonRate.Act <- dnds$UnambigCodons.Act/ dnds$Reads.Act  # per-window-codonsite fraction of unambiguous codons
   dnds$Subst.Act <- dnds$N.Act + dnds$S.Act
   dnds$Subst.Exp <- dnds$N.Exp + dnds$S.Exp
-  dnds$Cov.Act <- dnds$Reads.Act/dnds$PopSize.Act
-  #dnds$IsLowSubst.Act <- as.factor(dnds$N.Act < 1 | dnds$S.Act < 1)
-  #dnds <- subset(dnds, select=-c(PopSize.Act, ErrBase.Act, AmbigPadBase.Act, UnambigCodons.Act))
-  dim(dnds)
-  summary(dnds)
-  
-  
+  dnds$Cov.Act <- dnds$Reads.Act/dnds$PopSize.Act  
+  dnds$IsLowSubst.Act <- as.factor((dnds$N.Act > 0 & dnds$N.Act < 1) | (dnds$S.Act > 0 & dnds$S.Act < 1))
   
   # Average across all codon sites in a window
   per_window_ave <- ddply(.data=dnds, .variables=c("File", "Window_Start"), 
                           .fun=function(x) {                            
-#                             data.frame(Window_Conserve.Act=mean(x$ConserveTrueBase.Act, na.rm=TRUE),
-#                                        Window_Entropy.Act=mean(x$EntropyTrueBase.Act, na.rm=TRUE),
-#                                        Window_UnambigCodonRate.Act=mean(x$UnambigCodonRate.Act, na.rm=TRUE),
-#                                        Window_ErrBaseRate.Act=mean(x$ErrBaseRate.Act, na.rm=TRUE))
-                            data.frame(Window_Entropy.Act=mean(x$EntropyTrueBase.Act, na.rm=TRUE),
+                            data.frame(Window_Entropy.Act=mean(x$EntropyCodon.Act, na.rm=TRUE),
                                        Window_UnambigCodonRate.Act=mean(x$UnambigCodonRate.Act, na.rm=TRUE),
-                                       Window_ErrBaseRate.Act=mean(x$ErrBaseRate.Act, na.rm=TRUE))
+                                       Window_ErrPerCodon.Act=mean(x$ErrPerCodon.Act, na.rm=TRUE),
+                                       Window_Subst.Act=mean(x$Subst.Act, na.rm=TRUE)
+                                       )
                           })
+  
+  
   dnds <- merge(x=dnds, y=per_window_ave, by=c("File", "Window_Start"), all=TRUE, sort=TRUE)
   dim(dnds)
   summary(dnds)
   
   
-  
-  # Do not remove window-codonsites where there is no dnds and no dn-ds information because of insufficient window sequences.
-  # But do remove window codon sites in which there are no true dn/ds because of zero synonymous substitutions.
-  dnds <- dnds[!is.na(dnds$dNdS.Exp), ]
-  dim(dnds)
-  summary(dnds)
+#   # Do not remove window-codonsites where there is no dnds and no dn-ds information because of insufficient window sequences.
+#   # But do remove window codon sites in which there are no true dn/ds because of zero synonymous substitutions.
+#   dnds <- dnds[!is.na(dnds$dNdS.Exp), ]
+#   dim(dnds)
+#   summary(dnds)
   
   
   # Add a PSEUDOCOUNT so that dN/dS == 0 does not cause numerical instability
-  dnds$LOD_dNdS <- log(dnds$dNdS.Act + PSEUDOCOUNT) - log(dnds$dNdS.Exp + PSEUDOCOUNT)
+  dnds$LOD_dNdS <- log2(dnds$dNdS.Act + PSEUDOCOUNT) - log2(dnds$dNdS.Exp + PSEUDOCOUNT)
   dnds$AbsLOD_dNdS <- abs(dnds$LOD_dNdS)
 
+
   dnds$CrapLOD <- FALSE
-  dnds$CrapLOD <- as.factor(dnds$AbsLOD_dNdS >= 1)
+  dnds$CrapLOD <- as.factor(abs(dnds$LOD_dNdS) >= 1)
   dnds$CrapLOD[is.na(dnds$dNdS.Act)] <- TRUE
 
+  dnds$Dist_dn_minus_dS <- dnds$dN_minus_dS.Act - dnds$dN_minus_dS.Exp
+  dnds$AbsDist_dn_minus_dS <- abs(dnds$Dist_dn_minus_dS)
+  dnds$SqDist_dn_minus_dS <- dnds$Dist_dn_minus_dS ^ 2
+
+  dnds$CrapDist <- FALSE
+  dnds$CrapDist <- as.factor(abs(dnds$Dist_dn_minus_dS) >= 1)
+  dnds$CrapDist[is.na(dnds$CrapDist)] <- TRUE
+  
   dnds$wrongSelect <- FALSE
-  dnds$wrongSelect <- as.factor((dnds$dNdS.Act < 1 & dnds$dNdS.Exp > 1) | (dnds$dNdS.Act < 1 & dnds$dNdS.Exp > 1))
-  dnds$wrongSelect[is.na(dnds$dNdS.Act)] <- TRUE
+  dnds$wrongSelect <- as.factor((dnds$dN_minus_dS.Act < 0 & dnds$dN_minus_dS.Exp > 0) | (dnds$dN_minus_dS.Act > 0 & dnds$dN_minus_dS.Exp < 0))
+  dnds$wrongSelect[is.na(dnds$wrongSelect)] <- TRUE
+
+
+  # When we compare umberjack dnds against variables that affect entire windows (as opposed to window-codon sites),
+  # we need to use umberjack dnds averaged across window to avoid excess noise
+  window <- ddply(.data=dnds,
+                  .variables=c("File", "Window_Start"),
+                  .fun=function(x) {
+                    
+                  })
+
   print(dim(dnds))  
   print(summary(dnds))  
   head(dnds)
@@ -66,7 +176,30 @@ get_all_sim_dnds <- function() {
   return (dnds)
 }
 
-
+get_window_sim_dnds <- function(dnds) {
+  # When we compare umberjack dnds against variables that affect entire windows (as opposed to window-codon sites),
+  # we need to use umberjack dnds averaged across window to avoid excess noise when plotting\
+  
+  if (is.null(dnds)) {
+    dnds <- get_all_sim_dnds()
+  }
+  window_means <- aggregate(cbind(AbsLOD_dNdS, AbsDist_dn_minus_dS, SqDist_dn_minus_dS)  ~ File + Window_Start,
+                      data=dnds,
+                      FUN=function(y) {mean(y, na.rm=TRUE)})
+  colnames(window_means)[grep("AbsLOD_dNdS", colnames(window_means))] <- "WinAbsLOD_dNdS"
+  colnames(window_means)[grep("AbsDist_dn_minus_dS", colnames(window_means))] <- "WinAbsDist_dn_minus_dS"
+  colnames(window_means)[grep("SqDist_dn_minus_dS", colnames(window_means))] <- "WinSqDist_dn_minus_dS"
+  
+  vars_formula <- as.formula(paste0(
+    "cbind(",
+    paste0(WINDOW_COVAR_NAMES, collapse=", "),
+    ") ~ File + Window_Start"))
+  window_vars <- aggregate(vars_formula, data=dnds, FUN=function(x) {unique(x)})
+  
+  window <- merge(x=window_means, y=window_vars, all=TRUE)
+  
+  return (window)
+}
 
 # Random Forest, Recursive Feature Elmination  (Backwards Selection)  for Classification
 rf_feat_sel_class_rfe <- function(dnds, respname, feats) {
@@ -352,14 +485,14 @@ do_predict_class_diversify <- function() {
   object_size(dnds)
   print(paste0("dnds mem=", mem_used()))
   
-  NUM_RESP_NAMES <- c("LOD_dNdS", "Dist_dn_minus_dS", "AbsLOD_dNdS", "AbsDist_dn_minus_dS")
+  NUM_RESP_NAMES <- c("LOD_dNdS", "AbsLOD_dNdS", "AbsDist_dn_minus_dS", "Dist_dn_minus_dS")
   CAT_RESP_NAMES <- c("CrapLOD", "CrapDist", "wrongSelect")
   COVAR_NAMES <- colnames(dnds[sapply(dnds,is.numeric)])[!colnames(dnds[sapply(dnds,is.numeric)]) %in% NUM_RESP_NAMES]
   CAT_COVAR_NAMES <-  c() #c("IsLowSubst.Act")
   LM_COVAR_NAMES <- c(CAT_COVAR_NAMES, 
                       COVAR_NAMES[!(COVAR_NAMES %in% c("dNdS.Act", "dNdS.Exp",
                                                        "dN_minus_dS.Act", "dN_minus_dS.Exp",                                                        
-                                                       "ConserveTrueBase.Act", "ConserveTrueBase.Exp", "Window_Conserve.Act",                                                     
+                                                       "ConserveCodon.Act", "ConserveCodon.Exp", "Window_Conserve.Act",                                                     
                                                        "EN.Exp", "ES.Exp", "EN.Act", "ES.Act",
                                                        "Window_Start", "Window_End", "CodonSite",
                                                        "Subst.Act", "Subst.Exp"
@@ -418,12 +551,12 @@ do_predict_class_diversify_real <- function() {
                                                        "dN_minus_dS.Act", "dN_minus_dS.Exp",                                                        
                                                        "ConserveTrueBase.Act", "ConserveTrueBase.Exp", 
                                                        "Window_Conserve.Act",
-                                                       "Window_ErrBaseRate.Act",
+                                                       "Window_ErrPerCodon.Act",
                                                        "EN.Exp", "ES.Exp", "EN.Act", "ES.Act",
                                                        "Window_Start", "Window_End", "CodonSite",
                                                        "PopSize.Act",
                                                        "Cov.Act",
-                                                       "ErrBaseRate.Act",
+                                                       "ErrPerCodon.Act",
                                                        "N.Exp", "S.Exp", 
                                                        "EntropyTrueBase.Exp",
                                                        "Subst.Act", "Subst.Exp"
@@ -480,12 +613,12 @@ do_predict_cont_real <- function() {
                                                        "dN_minus_dS.Act", "dN_minus_dS.Exp",                                                        
                                                        "ConserveTrueBase.Act", "ConserveTrueBase.Exp", 
                                                        "Window_Conserve.Act",
-                                                       "Window_ErrBaseRate.Act",
+                                                       "Window_ErrPerCodon.Act",
                                                        "EN.Exp", "ES.Exp", "EN.Act", "ES.Act",
                                                        "Window_Start", "Window_End", "CodonSite",
                                                        "PopSize.Act",
                                                        "Cov.Act",
-                                                       "ErrBaseRate.Act",
+                                                       "ErrPerCodon.Act",
                                                        "N.Exp", "S.Exp", 
                                                        "EntropyTrueBase.Exp",
                                                        "Subst.Act", "Subst.Exp"

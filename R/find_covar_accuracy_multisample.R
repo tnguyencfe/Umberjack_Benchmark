@@ -2,6 +2,7 @@
 
 library(knitr)
 opts_chunk$set(warning=FALSE, message=FALSE, width=1200, echo=TRUE)
+options(width=150)
 
 #+ message=FALSE
 # From data from all windows, aggregates by averaging over windows
@@ -29,196 +30,68 @@ library(arm)  # for binned.plot for logistic regresison residuals
 source ('./speedStepAIC.R')
 source('./load_all_sim_dnds.R')
 
+# Per Window-Site data
 dnds <- get_all_sim_dnds()
 dim(dnds)
 summary(dnds)
 
-NUM_RESP_NAMES <- c("LOD_dNdS", "Dist_dn_minus_dS", "AbsLOD_dNdS", "AbsDist_dn_minus_dS")
-CAT_RESP_NAMES <- c("CrapLOD", "CrapDist")
-COVAR_NAMES <- colnames(dnds[sapply(dnds,is.numeric)])[!colnames(dnds[sapply(dnds,is.numeric)]) %in% NUM_RESP_NAMES]
-CAT_COVAR_NAMES <- c("IsLowSubst.Act")
-LM_COVAR_NAMES <- c(CAT_COVAR_NAMES, 
-                    COVAR_NAMES[!(COVAR_NAMES %in% c("dNdS.Act", "dN_minus_dS.Act", "dN_minus_dS.Exp", 
-                                                   # In separate analysis, conservation and entropy are highly correlated.
-                                                   # When we use speedglm, it bugs out after it removes highly correlated variables.
-                                                   # So we do it for them.
-                                                   "ConserveTrueBase.Act", "ConserveTrueBase.Exp", "Window_Conserve.Act",
-                                                   "UnambigCodonRate.Act", "Window_UnambigCodonRate.Act",
-                                                   # These are highly correlated with N, S
-                                                   "Subst.Act", "Subst.Exp",
-                                                   "EN.Exp", "ES.Exp", "EN.Act", "ES.Act",
-                                                   "Window_Start", "Window_End", "CodonSite", "Reads.Act"
-                                                   )
-                                )])
+
+# Per Window data
+window <-  get_window_sim_dnds(dnds=dnds)
+dim(window)
+summary(window)
+
+
+
+
 
 #' Error Rate:
 #' =============================================
 #' 
-#' **Nucleotide Error Rate After Umberjack Quality Masking = `r mean(dnds$ErrBaseRate.Act)/3 `**
+#' **Nucleotide Error Rate After Umberjack Quality Masking = `r mean(dnds$ErrPerCodon.Act)/3 `**
 #' 
 
 
 
 
 
-#' Correlation Between Features
-#' =============================================
+# #' Correlation Between Features
+# #' =============================================
+# #' 
+# 
+# # Find correlation between features.  Don't bother scaling.  The correlation heatmap is the same whether we scale & centre or not.
+# corMat <- cor(dnds[, c(NUM_RESP_NAMES, COVAR_NAMES)], use="complete.obs", method="spearman")
+# #+ fig.width=15, fig.height=15
+# heatmap.2(corMat,  col=bluered, density.info="none", trace="none", srtCol=45, main="Feature Correlation", margins=c(12,12), 
+#           colsep=(1:ncol(corMat)), rowsep=(1:nrow(corMat)), sepwidth=c(0.05, 0.05), sepcolor="black")
+# 
+
+
+
+#' Plot Inaccuracy Vs Numerical Variables That Apply at Window Level
+#' ==================================================
 #' 
-
-# Find correlation between features.  Don't bother scaling.  The correlation heatmap is the same whether we scale & centre or not.
-corMat <- cor(dnds[, c(NUM_RESP_NAMES, COVAR_NAMES)], use="complete.obs", method="spearman")
-#+ fig.width=15, fig.height=15
-heatmap.2(corMat,  col=bluered, density.info="none", trace="none", srtCol=45, main="Feature Correlation", margins=c(12,12), 
-          colsep=(1:ncol(corMat)), rowsep=(1:nrow(corMat)), sepwidth=c(0.05, 0.05), sepcolor="black")
-
-
-
-
-
-#' Density Plots of Each Numerical Variable
-#' =============================================
-#' 
-#' 
-plot_density <- function(colname) {
-  fig <- ggplot(dnds, aes_string(x=colname)) + 
-    geom_density(na.rm=TRUE, color="black") + 
-    geom_density(aes_string(x=colname), na.rm=TRUE) + 
-    ggtitle(paste0("Density plot ", colname))
-  print(fig)
-}
-
-sapresults <- sapply(COVAR_NAMES, plot_density)
-
-
-#' Plot Category Response Vs Variable
-#' =============================================
-#' 
-#' CrapLOD means a Log Odds Difference Between estimated dN/dS and expected dN/dS > 1.  
-#' 
-#' CrapDist means the distance between estimated scaled dN-dS and expected scaled dN-dS > 0.5.
-#' 
-#' 
-
-
-plot_catresp_vs_var <- function(resp_colname) {
-  sapresults <- sapply(COVAR_NAMES, 
-         function(var_colname) {
-           fig <- ggplot(dnds[!is.na(dnds[, resp_colname]),], aes_string(x=resp_colname, y=var_colname, color=resp_colname)) +             
-             geom_boxplot() + 
-             ggtitle(paste0("Box Plot ", resp_colname, " vs ", var_colname))
-           print(fig)
-         })
-}
-plot_catresp_vs_var("CrapLOD")
-plot_catresp_vs_var("CrapDist")
-
-plot_catresp_vs_catvar <- function(resp_colname) {
-  sapresults <- sapply(CAT_COVAR_NAMES, 
-                       function(var_colname) {
-                         fig <- ggplot(dnds[!is.na(dnds[, resp_colname]),], aes_string(x=resp_colname, fill=var_colname)) +             
-                           geom_bar(color="Black") + 
-                           ggtitle(paste0("Stacked BarPlot ", resp_colname, " vs ", var_colname))
-                         print(fig)
-                       })
-}
-plot_catresp_vs_catvar("CrapLOD")
-plot_catresp_vs_catvar("CrapDist")
-
-#' What variables determine really bad accuracy?
-#' =============================================
-#' 
-
-#' speedGLM  fit and plot
-#' 
-fit_and_plot_bin_fast<- function(resp_colname, fit, df) {
-  
-  bestfit <- stepAIC(fit, direction="both", trace=FALSE)
-  print(summary(bestfit))
-  
-  # speedglm doesn't expose residuals or fitted values. Do it ourselves
-  df_fit <- data.frame(Intercept=1, df[, attributes(bestfit$terms)$term.labels])
-  
-  # TODO:  hack - this is temp hack to get factors to be numeric
-  if (length(grep("IsLowSubst.Act", colnames(df_fit)) > 0)){
-    df_fit$IsLowSubst.Act <- ifelse (df_fit$IsLowSubst.Act == TRUE, 1, 0)  
-  }
-  
-  
-  df_fit$fitted.values <- inv.logit(as.vector(as.matrix(df_fit) %*% coef(bestfit)))  # [0, 1]
-  df_fit[, resp_colname] <-  df[, resp_colname]  
-  df_fit$NumResp <- ifelse(df_fit[, resp_colname] == TRUE, 1, 0)  #[0, 1]
-  df_fit$residuals <- df_fit$NumResp-df_fit$fitted.values   #[-1, 1]
-  summary(df_fit)
-  
-  binnedplot(x=df_fit$fitted.values, y=df_fit$residuals, nclass=NULL, 
-             xlab="Predicted Values", ylab="Average residual", 
-             main="Binned residual plot", 
-             cex.pts=0.8, col.pts=1, col.int="gray")
-  
-  coeffs <- data.frame(summary(bestfit)$coefficients)
-  colnames(coeffs)[grep("Pr", colnames(coeffs))] <- "pval"
-  coeffs$pval <- as.numeric(as.character(coeffs$pval))
-  coeffs$adj.pval <- p.adjust(coeffs$pval, method="BH")
-  coeffs$name <- rownames(coeffs)
-  print(coeffs)
-  
-  
-  # Print confusion matrix
-  print("Confusion Matrix")
-  print(confusionMatrix(data=ifelse(df_fit$fitted.values>=0.5, TRUE, FALSE), reference=df_fit[, resp_colname]))
-  
-  figs <- sapply(attributes(bestfit$terms)$term.labels, 
-                 function(varname) {
-                   fig <- ggplot(df_fit, aes_string(x=varname, y="fitted.values", color=resp_colname)) + 
-                     geom_point(alpha=0.5, shape=1) + 
-                     geom_smooth(method="glm", family="binomial", color="black") + 
-                     xlab(varname) + 
-                     ylab(paste0("Predicted Values of ", resp_colname, "\n")) + 
-                     ggtitle(paste0("Predicted Values of ", resp_colname, " Vs ", varname))
+plot_resp_vs_var <- function(data, resp_colname, var_colnames) {
+  figs <- sapply(var_colnames, 
+                 function(var_colname) {
+                   fig <- ggplot(data[!is.na(data[, resp_colname]) & abs(data[, resp_colname]) < 20,], 
+                                 aes_string(x=var_colname, y=resp_colname)) +             
+                     xlab(nice(var_colname)) + 
+                     ylab(nice(resp_colname)) + 
+                     geom_point(shape=1, alpha=0.5, na.rm=TRUE) + 
+                     geom_smooth(method="lm") + 
+                     ggtitle("Inaccuracy Vs Covariate")
                    print(fig)
                  })
-  
-  return (bestfit)
 }
+plot_resp_vs_var(data=window, resp_colname="WinSqDist_dn_minus_dS", var_colnames=WINDOW_COVAR_NAMES)
+#plot_resp_vs_var(data=window, resp_colname="WinAbsLOD_dNdS", var_colnames=WINDOW_COVAR_NAMES)
 
-cleandnds <- na.omit(dnds)
-summary(cleandnds)
-dim(cleandnds)
-
-
-
-#' **Stepwise AIC to find what causes extremely inaccurate estimates of dN/dS**
-crapLODFormula <- as.formula(paste0("CrapLOD~", paste0(LM_COVAR_NAMES, collapse=" + ")))
-print(crapLODFormula)
-allstepfitLOD <- speedglm(crapLODFormula, data=cleandnds, family=binomial(link='logit'))
-print(summary(allstepfitLOD))
-bestallstepfitLOD <- fit_and_plot_bin_fast(resp_colname="CrapLOD", fit=allstepfitLOD, df=cleandnds)
-
-
-#' **Stepwise AIC to find what causes extremely inaccurate estimates of scaled dn-ds**
-crapDistFormula <- as.formula(paste0("CrapDist~", paste0(LM_COVAR_NAMES, collapse=" + ")))
-print(crapDistFormula)
-allstepfitDist <- speedglm(crapDistFormula, data=cleandnds, family=binomial(link='logit'))
-print(summary(allstepfitDist))
-bestallstepfitDist <- fit_and_plot_bin_fast("CrapDist", allstepfitDist, df=cleandnds)
-
-
-
-#' Plot Numerical Response Vs Numerical Variables
+#' Plot Inaccuracy Vs Numerical Variables That Apply at Window-Site Level
 #' ==================================================
-plot_resp_vs_var <- function(resp_colname) {
-  figs <- sapply(COVAR_NAMES, 
-         function(var_colname) {
-           fig <- ggplot(dnds, aes_string(x=var_colname, y=resp_colname)) +             
-             geom_point(shape=1, alpha=0.5, na.rm=TRUE) + 
-             geom_smooth(method="lm") + 
-             ggtitle(paste0(resp_colname, " vs ", var_colname))
-           print(fig)
-         })
-}
-plot_resp_vs_var("Dist_dn_minus_dS")
-plot_resp_vs_var("LOD_dNdS")
 
+plot_resp_vs_var(data=dnds, resp_colname="SqDist_dn_minus_dS", var_colnames=WINDOW_SITE_COVAR_NAMES)
+#plot_resp_vs_var(data=dnds, resp_colname="AbsLOD_dNdS", var_colnames=WINDOW_SITE_COVAR_NAMES)
 
 #' Concordance
 #' ===========================================
@@ -238,12 +111,9 @@ print(concord$rho.c$est)
 #' **Concordance for dN-dS when all considered = `r concord$rho.c$est`**
 #' 
 
-#' **Now Remove Window-Sites with Nonsynonymous or Synonymous Substitutions higher than zero but lower than 1.**  
+#' **Now Remove Window-Sites with Phylogeny Substitutions Only Arising from Ambiguous Codons**  
 #' 
-#'  When sites have substitutions higher than zero but lower than 1, that means that there were no substitutions
-#'  of that kind other than the ones transition to/from ambiguous codons.
-#' 
-gooddnds <- dnds[!(dnds$S.Act < 1 & dnds$S.Act > 0) & !(dnds$N.Act < 1 & dnds$N.Act > 0), ]
+gooddnds <- dnds[dnds$IsLowSubst.Act == FALSE, ]
 summary(gooddnds)
 dim(gooddnds)
 
@@ -260,63 +130,27 @@ print(concord$rho.c$est)
 #' 
 
 #' Plot actual versus expected
-fig <- ggplot(gooddnds, aes(x=dNdS.Exp, y=dNdS.Act)) + 
+fig <- ggplot(gooddnds[!is.na(gooddnds$dNdS.Exp) & !is.na(gooddnds$dNdS.Act), ], aes(x=dNdS.Exp, y=dNdS.Act)) + 
   geom_point(alpha=0.5, shape=1) + 
   geom_smooth(method="lm", color="Red") + 
   xlab("\nExpected dN/dS") + 
   ylab("Inferred dN/dS\n") + 
-  ggtitle("Scatterplot Expected vs Inferred dN/dS, Excl Low Syn")
+  ggtitle("Scatterplot Expected vs Inferred dN/dS, Excl Sites with Only Ambig Subs")
 print(fig)
 
-fig <- ggplot(gooddnds, aes(x=dN_minus_dS.Exp, y=dN_minus_dS.Act)) + 
+fig <- ggplot(gooddnds[!is.na(gooddnds$dN_minus_dS.Exp) & !is.na(gooddnds$dN_minus_dS.Act), ], aes(x=dN_minus_dS.Exp, y=dN_minus_dS.Act)) + 
   geom_point(alpha=0.5, shape=1) + 
   geom_smooth(method="lm", color="Red") + 
-  xlab("\nExpected dN/dS") + 
-  ylab("Inferred dN/dS\n") + 
-  ggtitle("Scatterplot Expected vs Inferred dN-dS, Exclude low Syn")
-print(fig)
-
-gooddnds$CovBin <- round(gooddnds$Cov.Act)
-gooddnds$CovBin <- as.factor(gooddnds$CovBin)
-
-fig <- ggplot(gooddnds, aes(x=EntropyTrueBase.Exp, y=LOD_dNdS, color=Cov.Act)) + 
-  geom_point(alpha=0.5, shape=1) + 
-  geom_smooth(method="lm", color="Red") + 
-  xlab("\nSite Entropy") + 
-  ylab("Log(Inferred dN/dS) - Log(Expected dN/dS)\n") + 
-  ggtitle("Log Odds Difference dN/dS By Full Population Entropy and Coverage")
-print(fig)
-
-fig <- ggplot(gooddnds, aes(x=Subst.Exp, y=LOD_dNdS, color=Cov.Act)) + 
-  geom_point(alpha=0.5, shape=1) + 
-  geom_smooth(method="lm", color="Red") + 
-  xlab("\nSite Entropy") + 
-  ylab("Log(Inferred dN/dS) - Log(Expected dN/dS)\n") + 
-  ggtitle("Log Odds Difference dN/dS By Full Population Site Substitutions and Coverage")
-print(fig)
-
-
-fig <- ggplot(gooddnds, aes(x=EntropyTrueBase.Exp, y=AbsLOD_dNdS, color=CovBin)) + 
-  #geom_point(alpha=0.5, shape=1) + 
-  geom_smooth(method="loess") + 
-  xlab("\nSite Substitutions") + 
-  ylab("|Log(Inferred dN/dS) - Log(Expected dN/dS)|\n") + 
-  ggtitle("Log Odds Difference dN/dS By Full Population Entropy and Coverage")
-print(fig)
-
-fig <- ggplot(gooddnds, aes(x=Subst.Exp, y=AbsLOD_dNdS, color=CovBin)) + 
-  #geom_point(alpha=0.5, shape=1) + 
-  geom_smooth(method="loess") + 
-  xlab("\nSite Entropy") + 
-  ylab("|Log(Inferred dN/dS) - Log(Expected dN/dS)|\n") + 
-  ggtitle("Log Odds Difference dN/dS By Full Population Site Substitutions and Coverage")
+  xlab("\nExpected dN-dS") + 
+  ylab("Inferred dN-dS\n") + 
+  ggtitle("Scatterplot Expected vs Inferred dN-dS,Excl Sites with Only Ambig Subs")
 print(fig)
 
 
 
 
 #' 
-#' GLM for Predictors for Bad performance, Ignore Sites with N or S higher than zero but lower than 1.  
+#' GLM for Predictors for Umberjack Accuracy
 #' =========================================
 #' 
 
@@ -344,7 +178,7 @@ fit_and_plot_glm_fast <- function(resp_colname, fit, df) {
     geom_smooth(method="loess", color="Red") +
     xlab("\nPredicted Values") + 
     ylab("Residuals\n") + 
-    ggtitle("Plot Predicted vs Residuals")
+    ggtitle("Predicted vs Residuals")
   print(fig)
   
   # residual normality
@@ -360,29 +194,17 @@ fit_and_plot_glm_fast <- function(resp_colname, fit, df) {
   
   
   predictors <-  attributes(bestfit$terms)$term.labels
-  
-  figs <- sapply(predictors, 
-                 function(varname) {
-                   fig <- ggplot(df_fit, aes_string(x=varname, y="residuals")) + 
-                     geom_point(alpha=0.5, shape=1) + 
-                     geom_smooth(method="lm", color="Red") + 
-                     xlab(varname) + 
-                     ylab("Residuals\n") + 
-                     ggtitle(paste0("Residuals of  ", resp_colname, " Vs ", varname))
-                   print(fig)
-                 })
-  
-  # Plot predicted values
-  figs <- sapply(predictors, 
-                 function(varname) {
-                   fig <- ggplot(df_fit, aes_string(x=varname, y="fitted.values")) + 
-                     geom_point(alpha=0.5, shape=1) + 
-                     geom_smooth(method="lm", color="Red") + 
-                     xlab(varname) + 
-                     ylab("Predicted Values\n") + 
-                     ggtitle(paste0("Predicted Values for  ", resp_colname, " From ", varname))
-                   print(fig)
-                 })
+#   
+#   figs <- sapply(predictors, 
+#                  function(varname) {
+#                    fig <- ggplot(df_fit, aes_string(x=varname, y="residuals")) + 
+#                      geom_point(alpha=0.5, shape=1) + 
+#                      geom_smooth(method="lm", color="Red") + 
+#                      xlab(nice(varname)) + 
+#                      ylab("Residuals\n") + 
+#                      ggtitle(paste0("Residuals vs covariate"))
+#                    print(fig)
+#                  })
   
   return (bestfit)
 }
@@ -392,11 +214,11 @@ cleandnds <- na.omit(dnds)
 summary(cleandnds)
 dim(cleandnds)
 
-LODFormula <- as.formula(paste0("AbsLOD_dNdS~", paste0(LM_COVAR_NAMES, collapse=" + ")))
-print(LODFormula)
-allfitLOD <- speedglm(LODFormula, data=cleandnds)
-print(summary(allfitLOD))
-bestfit <- fit_and_plot_glm_fast("AbsLOD_dNdS", allfitLOD, df=cleandnds)
+# LODFormula <- as.formula(paste0("AbsLOD_dNdS~", paste0(LM_COVAR_NAMES, collapse=" + ")))
+# print(LODFormula)
+# allfitLOD <- speedglm(LODFormula, data=cleandnds)
+# print(summary(allfitLOD))
+# bestfit <- fit_and_plot_glm_fast("AbsLOD_dNdS", allfitLOD, df=cleandnds)
 
 
 
