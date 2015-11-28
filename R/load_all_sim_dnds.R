@@ -7,7 +7,36 @@ NUM_RESP_NAMES <- c("LOD_dNdS", "Dist_dn_minus_dS", "AbsLOD_dNdS", "AbsDist_dn_m
 CAT_RESP_NAMES <- c("CrapLOD", "CrapDist")
 
 # All numeric varaibles
-NUM_NAMES <- colnames(dnds[sapply(dnds,is.numeric)])
+NUM_NAMES <- c("Window_Start",
+               "Window_End",
+               "CodonSite",
+               "Is_Break",
+               "BreakRatio.Act",
+               "Reads.Act",
+               "UnambigCodonRate.Act",
+               "AADepth.Act",
+               "PopSize.Act",
+               "ConserveCodon.Act",
+               "EntropyCodon.Act",
+               "UnknownPerCodon.Act",
+               "ErrPerCodon.Act",
+               "N.Act",
+               "S.Act",
+               "EN.Act",
+               "ES.Act",
+               "dNdS.Act",
+               "dN_minus_dS.Act",
+               "TreeLen.Act",
+               "TreeDepth.Act",
+               "TreeDistPerRead.Act",
+               "ConserveCodon.Exp",
+               "EntropyCodon.Exp",
+               "N.Exp",
+               "S.Exp",
+               "EN.Exp",
+               "ES.Exp",
+               "dNdS.Exp",
+               "dN_minus_dS.Exp")
 
 # Numeric variables that might affect Umberjack accuracy
 COVAR_NAMES <- NUM_NAMES[!NUM_NAMES %in% 
@@ -102,8 +131,8 @@ nice <- function(name) {
   
   
 get_all_sim_dnds <- function() {
-  #DNDS_FILENAME <- "../simulations/out/collate_all.treedist.csv"
-  DNDS_FILENAME <- "../simulations/out/collate_all.treedist.smallish.csv"
+  DNDS_FILENAME <- "../simulations/out/collate_all.treedist.csv"
+  
   #DNDS_FILENAME <- "../simulations/out/collate_all.csv"
   
   # Window_Start,Window_End,CodonSite,File,Is_Break,Reads.Act,UnambigCodonRate.Act,AADepth.Act,
@@ -484,22 +513,7 @@ do_predict_class_diversify <- function() {
   head(dnds)
   object_size(dnds)
   print(paste0("dnds mem=", mem_used()))
-  
-  NUM_RESP_NAMES <- c("LOD_dNdS", "AbsLOD_dNdS", "AbsDist_dn_minus_dS", "Dist_dn_minus_dS")
-  CAT_RESP_NAMES <- c("CrapLOD", "CrapDist", "wrongSelect")
-  COVAR_NAMES <- colnames(dnds[sapply(dnds,is.numeric)])[!colnames(dnds[sapply(dnds,is.numeric)]) %in% NUM_RESP_NAMES]
-  CAT_COVAR_NAMES <-  c() #c("IsLowSubst.Act")
-  LM_COVAR_NAMES <- c(CAT_COVAR_NAMES, 
-                      COVAR_NAMES[!(COVAR_NAMES %in% c("dNdS.Act", "dNdS.Exp",
-                                                       "dN_minus_dS.Act", "dN_minus_dS.Exp",                                                        
-                                                       "ConserveCodon.Act", "ConserveCodon.Exp", "Window_Conserve.Act",                                                     
-                                                       "EN.Exp", "ES.Exp", "EN.Act", "ES.Act",
-                                                       "Window_Start", "Window_End", "CodonSite",
-                                                       "Subst.Act", "Subst.Exp"
-                                                       
-                      )
-                      )])
-  
+    
   feats <- c(LM_COVAR_NAMES)
   
   
