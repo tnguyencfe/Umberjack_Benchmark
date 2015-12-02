@@ -207,8 +207,8 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
                     outrow["TreeDist"] = tree_dist
 
                     outrow["Is_Break"] = 0
-                    for strand_start, strand_end in full_popn_breaks:
-                        if len(full_popn_breaks) > 1 and outrow["CodonSite"] > 1 and outrow["CodonSite"] == strand_start:
+                    for nuc_strand_start_base1, nuc_strand_end_base1 in full_popn_breaks:
+                        if len(full_popn_breaks) > 1 and (nucoffset_0based + 1) == nuc_strand_start_base1:
                             outrow["Is_Break"] = 1
 
                     outrow["BreakRatio"] = break_ratio
