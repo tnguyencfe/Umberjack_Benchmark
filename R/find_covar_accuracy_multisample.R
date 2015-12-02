@@ -1,3 +1,4 @@
+
 # For multiple simulations, find the variables that affect accuracy
 
 library(knitr)
@@ -14,7 +15,6 @@ library(stats)
 library(psych)
 library(GGally)
 library(MASS)
-library(caret)
 library(gplots)
 library(RColorBrewer)
 library(nortest)
@@ -66,16 +66,31 @@ summary(window)
 #           colsep=(1:ncol(corMat)), rowsep=(1:nrow(corMat)), sepwidth=c(0.05, 0.05), sepcolor="black")
 # 
 
-
-
 #' Plot Inaccuracy Vs Numerical Variables That Apply at Window Level
 #' ==================================================
 #' 
-plot_resp_vs_var <- function(data, resp_colname, var_colnames) {
+
+# This removes outliers so that we can visualize the majority of points 
+outlier_range <- function(x) {
+  qnt <- quantile(x, probs=c(.25, .75), na.rm = TRUE, names=FALSE)
+  fudge <- 1.5 * IQR(x, na.rm = TRUE)
+  return (c(lower=qnt[1] - fudge, upper=qnt[2] + fudge))
+}
+
+plot_resp_vs_var <- function(data, resp_colname, var_colnames, color_colname=NULL) {
+  resp_range <- outlier_range(data[, resp_colname])
+  filter_data <- data[!is.na(data[, resp_colname]) & 
+                        data[, resp_colname] >= resp_range["lower"] &
+                        data[, resp_colname] <= resp_range["upper"], ]
   figs <- sapply(var_colnames, 
                  function(var_colname) {
-                   fig <- ggplot(data[!is.na(data[, resp_colname]) & abs(data[, resp_colname]) < 20,], 
-                                 aes_string(x=var_colname, y=resp_colname)) +             
+                   if (!is.null(color_colname)) {
+                     fig <- ggplot(filter_data, aes_string(x=var_colname, y=resp_colname, color=color_colname)) + 
+                       guides(color=FALSE)
+                   } else {
+                     fig <- ggplot(filter_data, aes_string(x=var_colname, y=resp_colname))             
+                   }
+                   fig <- fig +             
                      xlab(nice(var_colname)) + 
                      ylab(nice(resp_colname)) + 
                      geom_point(shape=1, alpha=0.5, na.rm=TRUE) + 
@@ -84,8 +99,12 @@ plot_resp_vs_var <- function(data, resp_colname, var_colnames) {
                    print(fig)
                  })
 }
-plot_resp_vs_var(data=window, resp_colname="WinSqDist_dn_minus_dS", var_colnames=WINDOW_COVAR_NAMES)
+plot_resp_vs_var(data=window, resp_colname="WinSqDist_dn_minus_dS", var_colnames=WINDOW_COVAR_NAMES, color_colname="File")
 #plot_resp_vs_var(data=window, resp_colname="WinAbsLOD_dNdS", var_colnames=WINDOW_COVAR_NAMES)
+
+#' Plot robinson foulds with other confounding variables
+plot_resp_vs_var(data=window, resp_colname="TreeDistPerRead.Act", var_colnames=WINDOW_COVAR_NAMES, color_colname="File")
+
 
 #' Plot Inaccuracy Vs Numerical Variables That Apply at Window-Site Level
 #' ==================================================

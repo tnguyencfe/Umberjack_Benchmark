@@ -3,10 +3,10 @@
 # This is just an mpi wrapper for load_all_sim_dnds.R which does all the work
 
 
-library(caret)
+
 library(plyr)
 library(doMPI)  # for MPI parallelism
-library(randomForest)
+
 library(pryr)
 
 
@@ -16,10 +16,18 @@ PROCS <- 5
 
 source("./load_all_sim_dnds.R")
 
-slaves <- startMPIcluster(count=PROCS)
+TRAIN_DNDS_CSV <- NULL
+args <- commandArgs(TRUE)
+if (length(args) >= 1) {
+  TRAIN_DNDS_CSV <- args[1]  
+}
+
+print (paste0("Input argument=", TRAIN_DNDS_CSV))
+
+slaves <- startMPIcluster(count=PROCS, verbose=TRUE)
 registerDoMPI(slaves)
 
-do_predict_class_diversify()
+do_predict_class_diversify(train_dnds_csv=TRAIN_DNDS_CSV, xfold=FOLDS)
 
 closeCluster(slaves)
 mpi.quit()

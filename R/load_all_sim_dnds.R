@@ -1,5 +1,7 @@
 library(plyr)
-
+library(pryr)
+library(caret)
+library(randomForest)
 
 PSEUDOCOUNT <- 1e-7
 
@@ -130,20 +132,30 @@ nice <- function(name) {
 }
   
   
-get_all_sim_dnds <- function() {
+get_all_sim_dnds <- function(dnds_filename=NULL) {
+   
   DNDS_FILENAME <- "../simulations/out/collate_all.treedist.csv"
+    
+  if (is.null(dnds_filename))
+  {
+    dnds_filename <- DNDS_FILENAME
+  }
   
-  #DNDS_FILENAME <- "../simulations/out/collate_all.csv"
+  print (paste0("Using Training Data ", dnds_filename))
   
   # Window_Start,Window_End,CodonSite,File,Is_Break,Reads.Act,UnambigCodonRate.Act,AADepth.Act,
   #PopSize.Act,ConserveCodon.Act,EntropyCodon.Act,UnknownPerCodon.Act,ErrPerCodon.Act,N.Act,S.Act,EN.Act,ES.Act,
   #dNdS.Act,dN_minus_dS.Act,TreeLen.Act,TreeDepth.Act,TreeDistPerRead.Act,ConserveCodon.Exp,EntropyCodon.Exp,
   #N.Exp,S.Exp,EN.Exp,ES.Exp,dNdS.Exp,dN_minus_dS.Exp
-  dnds <- read.table(DNDS_FILENAME, header=TRUE, sep=",", na.strings=c("", "None"))
+  dnds <- read.table(dnds_filename, header=TRUE, sep=",", na.strings=c("", "None"))
   dnds$Subst.Act <- dnds$N.Act + dnds$S.Act
   dnds$Subst.Exp <- dnds$N.Exp + dnds$S.Exp
   dnds$Cov.Act <- dnds$Reads.Act/dnds$PopSize.Act  
   dnds$IsLowSubst.Act <- as.factor((dnds$N.Act > 0 & dnds$N.Act < 1) | (dnds$S.Act > 0 & dnds$S.Act < 1))
+  
+  if (!"TreeDist.Act"  %in% colnames(dnds)) {
+    dnds$TreeDist.Act <- dnds$TreeDistPerRead.Act * dnds$Reads.Act
+  }
   
   # Average across all codon sites in a window
   per_window_ave <- ddply(.data=dnds, .variables=c("File", "Window_Start"), 
@@ -157,6 +169,25 @@ get_all_sim_dnds <- function() {
   
   
   dnds <- merge(x=dnds, y=per_window_ave, by=c("File", "Window_Start"), all=TRUE, sort=TRUE)
+  
+  
+#   # Count breakpoints per window
+#   breaks_per_win <- aggregate(Is_Break ~ File + Window_Start, data=dnds, FUN=sum)
+#   
+#   breaks_per_codon <- aggregate(Is_Break ~ File + CodonSite, data=dnds, 
+#                                 FUN=function(x) {
+#     #result <- unique(x)
+# #     if (length (result) > 1) {
+# #       stop("Wrong")
+# #     }
+# #     return (result)
+#     return (sum(x))                                  
+#     })
+# 
+#   breaks_per_site <- aggregate(Is_Break ~ File + CodonSite, data=dnds, FUN=function(x) {unique(x)})
+#   breaks_per_genome <- aggregate(Is_Break ~ File, data=breaks_per_site, FUN=sum)
+
+  
   dim(dnds)
   summary(dnds)
   
@@ -231,7 +262,7 @@ get_window_sim_dnds <- function(dnds) {
 }
 
 # Random Forest, Recursive Feature Elmination  (Backwards Selection)  for Classification
-rf_feat_sel_class_rfe <- function(dnds, respname, feats) {
+rf_feat_sel_class_rfe <- function(dnds, respname, feats, xfold=1) {
   
   print(paste0("Response=", respname))
   print(paste0("Features=", paste0(feats, collapse=", ")))
@@ -256,7 +287,7 @@ rf_feat_sel_class_rfe <- function(dnds, respname, feats) {
   # Only rank features on first iteration when all features are used, 
   #   so that we get more accurate depiction of how much
   #   feature matters when all features considered.
-  control <- rfeControl(functions=new_rfFuncs, method="boot", number=FOLDS, 
+  control <- rfeControl(functions=new_rfFuncs, method="boot", number=xfold, 
                         #rerank=TRUE,  # rerank features after eliminate
                         saveDetails=TRUE,   # save predictions and variable importances from selection process
                         returnResamp="all",   # save all resampling summary metrics
@@ -505,9 +536,9 @@ do_predict_cont <- function() {
 
 
 # Does all the work for finding Umberjack accuracy for classifying sites as Diversifying
-do_predict_class_diversify <- function() {
+do_predict_class_diversify <- function(train_dnds_csv=NULL, xfold=1) {
   
-  dnds <- get_all_sim_dnds()
+  dnds <- get_all_sim_dnds(dnds_filename=train_dnds_csv)
   dim(dnds)
   summary(dnds)
   head(dnds)
@@ -518,7 +549,7 @@ do_predict_class_diversify <- function() {
   
   
   print("About to do random forest feature selection to determine what affects accuracy of umberjack predictions of diversifying sites")
-  rfe_class_results <- rf_feat_sel_class_rfe(dnds=dnds, respname="wrongSelect", feats=feats)
+  rfe_class_results <- rf_feat_sel_class_rfe(dnds=dnds, respname="wrongSelect", feats=feats, xfold=xfold)
   
   # Get the predictions for all of the simulation data
   wrongselect_dnds_dat <- dnds[rowSums(is.na(dnds[, c("wrongSelect", feats)])) == 0, ]  
