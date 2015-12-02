@@ -19,7 +19,7 @@ MATE_LEN_BP = 251
 SIM_DATA_DIR =  os.path.dirname(os.path.realpath(__file__)) + os.sep + "simulations/data"
 SIM_FIELD_RANGE_CSV = "./sim_config/sim_args_range.csv"
 SIM_ARGS_TSV = "./sim_config/sim_args.tsv"  # a tsv that specifies the actual field values for each simulated dataset
-NUM_DATASETS = 15
+NUM_DATASETS = 50
 
 # Use path relative to directory of simulated dataset config file
 # /Umberjack_Benchmark/simulations/data/SimDataset/SimDataset.config
@@ -45,16 +45,18 @@ RANDOM_FIELDS = ["TotalMutRates"]
 LHS_FIELDS = ["Cover",  # fraction of individuals covered by a read
               "FragLenAve",
               "FragLenStd",
-              "WindowSize",
-              "MinWinWidth",  # fraction of window size required to have true base in sequence
-              "MinWinDepth",  # fraction of indiv, or fraction of coverage, whichever is smaller
-              "MinQual",
-              "NumBreakpoints",   # total recombination breakpoints in genome
-              "Generations",
-              "SelectionRate"
+              #"WindowSize",
+              ##"MinWinWidth",  # fraction of window size required to have true base in sequence
+              #"MinWinDepth",  # fraction of indiv, or fraction of coverage, whichever is smaller
+              #"MinQual",
+              #"NumBreakpoints",   # total recombination breakpoints in genome
+              "RecomboRate",  # Recombinations Per Codon
+              "Generations"
+              #"SelectionRate"
 ]
 
-LHS_MUTRATE_FIELDS = ["TreeLen"]  # total substitutions/site for full population tree
+#LHS_MUTRATE_FIELDS = ["TreeLen"]  # total substitutions/site for full population tree
+LHS_MUTRATE_FIELDS = ["MutationRate"]  # Nucleotide mutations per generation
 
 FieldRange = namedtuple("FieldRange", field_names=["Min", "Max", "Is_Int"])
 
