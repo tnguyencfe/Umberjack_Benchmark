@@ -207,8 +207,10 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
                     outrow["TreeDist"] = tree_dist
 
                     outrow["Is_Break"] = 0
-                    for nuc_strand_start_base1, nuc_strand_end_base1 in full_popn_breaks:
-                        if len(full_popn_breaks) > 1 and (nucoffset_0based + 1) == nuc_strand_start_base1:
+                    for nuc_strand_start_wrt_ref_base1, nuc_strand_end_wrt_ref_base1 in full_popn_breaks:
+                        nuc_pos_wrt_ref_base1 = win_start_nuc_pos_1based_wrt_ref + nucoffset_0based
+                        # If there are no recombination breaks, full_popn_breaks still contains the full genome as a contiguous section
+                        if len(full_popn_breaks) > 1 and nuc_pos_wrt_ref_base1 == nuc_strand_start_wrt_ref_base1:
                             outrow["Is_Break"] = 1
 
                     outrow["BreakRatio"] = break_ratio
@@ -454,7 +456,7 @@ def make1csv(output_csv_filename, sim_args_tsv):
                         outrow["Window_Start"] = row["Window_Start"]
                         outrow["Window_End"] = row["Window_End"]
                         outrow["CodonSite"] = codonsite
-                        outrow["File"] = inferred_collate_dnds_csv
+                        outrow["File"] = sim_data.name # inferred_collate_dnds_csv
                         outrow["Reads.Act"] = row["Reads"]
                         outrow["UnambigCodonRate.Act"] = float(row["CodonDepth"])/float(row["Reads"])
                         outrow["AADepth.Act"]  = row["AADepth"] if  row.get("AADepth") else None  # TODO: hack since some earlier simulations don't have this value
