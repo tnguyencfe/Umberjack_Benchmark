@@ -29,12 +29,16 @@ library(gtools)  # for inv.logit
 library(arm)  # for binned.plot for logistic regresison residuals
 source ('./speedStepAIC.R')
 source('./load_all_sim_dnds.R')
+source("../../SlidingWindow/test/simulations/R/plot_helper.R")  # sliding window git repo
 
 # Per Window-Site data
-dnds <- get_all_sim_dnds()
+if (exists("dnds_filename")) {
+  dnds <- get_all_sim_dnds(dnds_filename)  
+} else {
+  dnds <- get_all_sim_dnds()
+}
 dim(dnds)
 summary(dnds)
-
 
 # Per Window data
 window <-  get_window_sim_dnds(dnds=dnds)
@@ -51,21 +55,6 @@ summary(window)
 #' **Nucleotide Error Rate After Umberjack Quality Masking = `r mean(dnds$ErrPerCodon.Act)/3 `**
 #' 
 
-
-
-
-
-# #' Correlation Between Features
-# #' =============================================
-# #' 
-# 
-# # Find correlation between features.  Don't bother scaling.  The correlation heatmap is the same whether we scale & centre or not.
-# corMat <- cor(dnds[, c(NUM_RESP_NAMES, COVAR_NAMES)], use="complete.obs", method="spearman")
-# #+ fig.width=15, fig.height=15
-# heatmap.2(corMat,  col=bluered, density.info="none", trace="none", srtCol=45, main="Feature Correlation", margins=c(12,12), 
-#           colsep=(1:ncol(corMat)), rowsep=(1:nrow(corMat)), sepwidth=c(0.05, 0.05), sepcolor="black")
-# 
-
 #' Plot Inaccuracy Vs Numerical Variables That Apply at Window Level
 #' ==================================================
 #' 
@@ -79,38 +68,87 @@ outlier_range <- function(x) {
 
 plot_resp_vs_var <- function(data, resp_colname, var_colnames, color_colname=NULL) {
   resp_range <- outlier_range(data[, resp_colname])
-  filter_data <- data[!is.na(data[, resp_colname]) & 
-                        data[, resp_colname] >= resp_range["lower"] &
-                        data[, resp_colname] <= resp_range["upper"], ]
   figs <- sapply(var_colnames, 
                  function(var_colname) {
-                   if (!is.null(color_colname)) {
-                     fig <- ggplot(filter_data, aes_string(x=var_colname, y=resp_colname, color=color_colname)) + 
-                       guides(color=FALSE)
-                   } else {
-                     fig <- ggplot(filter_data, aes_string(x=var_colname, y=resp_colname))             
+                   if (!is.null(color_colname)) { 
+                     colourCount <- length(levels(data[, color_colname]))
+                     getPalette <- colorRampPalette(brewer.pal(9, "Set1"))
+                     
+                     fig <- ggplot(data, aes_string(x=var_colname, y=resp_colname)) + 
+#                        guides(color=FALSE) + 
+                       xlab(nice(var_colname)) + 
+                       ylab(nice(resp_colname)) +
+                       scale_colour_manual(values = getPalette(colourCount)) +
+                       theme_bw() + 
+                       geom_point(aes_string(color=color_colname), alpha=0.7, na.rm=TRUE) + 
+                       geom_smooth(aes_string(color=color_colname, group=color_colname), method="lm", se=FALSE) + 
+                       geom_smooth(method="lm", se=FALSE, color="black", size=2) + 
+                       scale_y_continuous(limits=c(max(resp_range["lower"], min(data[, resp_colname], na.rm=TRUE)), 
+                                                   min(resp_range["upper"], max(data[, resp_colname], na.rm=TRUE)))) + 
+                       ggtitle("Inaccuracy Vs Covariate")
+                     print(fig)
+                   } else {                          
+                     fig <- ggplot(filter_data, aes_string(x=var_colname, y=resp_colname)) + 
+                       #guides(color=FALSE) + 
+                       theme_bw() + 
+                       xlab(nice(var_colname)) + 
+                       ylab(nice(resp_colname)) + 
+                       geom_point(shape=1, alpha=0.5, na.rm=TRUE) +                        
+                       geom_smooth(method="lm", se=FALSE) + 
+                       ggtitle("Inaccuracy Vs Covariate")
+                     print(fig)
                    }
-                   fig <- fig +             
-                     xlab(nice(var_colname)) + 
-                     ylab(nice(resp_colname)) + 
-                     geom_point(shape=1, alpha=0.5, na.rm=TRUE) + 
-                     geom_smooth(method="lm") + 
-                     ggtitle("Inaccuracy Vs Covariate")
-                   print(fig)
+                   
                  })
 }
+#+ fig.width=10
 plot_resp_vs_var(data=window, resp_colname="WinSqDist_dn_minus_dS", var_colnames=WINDOW_COVAR_NAMES, color_colname="File")
 #plot_resp_vs_var(data=window, resp_colname="WinAbsLOD_dNdS", var_colnames=WINDOW_COVAR_NAMES)
 
 #' Plot robinson foulds with other confounding variables
+#' 
+#+ fig.width=10
 plot_resp_vs_var(data=window, resp_colname="TreeDistPerRead.Act", var_colnames=WINDOW_COVAR_NAMES, color_colname="File")
 
 
 #' Plot Inaccuracy Vs Numerical Variables That Apply at Window-Site Level
 #' ==================================================
-
-plot_resp_vs_var(data=dnds, resp_colname="SqDist_dn_minus_dS", var_colnames=WINDOW_SITE_COVAR_NAMES)
+#+ fig.width=10
+plot_resp_vs_var(data=dnds, resp_colname="SqDist_dn_minus_dS", var_colnames=WINDOW_SITE_COVAR_NAMES, color_colname="File")
 #plot_resp_vs_var(data=dnds, resp_colname="AbsLOD_dNdS", var_colnames=WINDOW_SITE_COVAR_NAMES)
+
+#' Investigate Tree Accuracy vs Umberjack dnds Accuracy
+#' ==============
+#' 
+
+window$TreeLenBin.Act <- cut(window$TreeLen.Act, breaks=5)
+
+#+ fig.height=12, fig.width=15
+fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) + 
+  xlab(nice("TreeDist.Act")) + 
+  ylab(nice("WinSqDist_dn_minus_dS")) +  
+  theme_bw() + 
+  geom_point(aes(color=File), alpha=0.7, na.rm=TRUE) + 
+  geom_smooth(aes(color=File, group=File), method="lm", se=FALSE) + 
+  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
+  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Tree Length") + 
+  facet_wrap(~TreeLenBin.Act, scales="free")
+  #facet_wrap(~TreeLenBin.Act)
+print(fig)
+
+window$PolytomyBin.Act <- cut(window$Polytomy.Act, breaks=5)
+fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) + 
+  xlab(nice("TreeDist.Act")) + 
+  ylab(nice("WinSqDist_dn_minus_dS")) +  
+  theme_bw() + 
+  geom_point(aes(color=File), alpha=0.7, na.rm=TRUE) + 
+  geom_smooth(aes(color=File, group=File), method="lm", se=FALSE) + 
+  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
+  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Polytomies") +   
+  facet_wrap(~PolytomyBin.Act)
+print(fig)
+
+
 
 #' Concordance
 #' ===========================================
@@ -148,6 +186,77 @@ print(concord$rho.c$est)
 #' **Concordance for dN-dS when only good window-sites considered = `r concord$rho.c$est`**
 #' 
 
+
+#' **concordance by Dataset**
+
+concord <- ddply(.data=dnds, .variables="File", .fun=function(x) {
+  data.frame(concord=epi.ccc(x$dN_minus_dS.Act, x$dN_minus_dS.Exp)$rho.c$est)
+})
+
+#+ results="asis"
+kable(concord, format="html", caption="Concordance by dataset")
+
+#'
+#' **concordance by file, ignore sites with only ambiguous substitutions**
+#' 
+concord <- ddply(.data=gooddnds, .variables="File", .fun=function(x) {
+  data.frame(concord=epi.ccc(x$dN_minus_dS.Act, x$dN_minus_dS.Exp)$rho.c$est)
+})
+
+#+ results="asis"
+kable(concord, format="html", caption="Concordance by dataset, Excluding sites with Only  Ambiguous Subs")
+
+#'
+#' Plot expected values from each file
+#+ fig.width=10
+fig <- ggplot(dnds, aes(y=dN_minus_dS.Exp, x=File, color=File)) + 
+  geom_boxplot() + 
+  guides(color=FALSE) + 
+  ylab("expected dn-ds") + 
+  xlab("Dataset") + 
+  ggtitle("Expected dnds from each dataset")
+print (fig)
+
+#' Plot diff from expected values from each file
+#+ fig.width=12
+fig <- ggplot(dnds, aes(x=SqDist_dn_minus_dS, color=File)) + 
+  geom_density() + 
+  xlab("Sq diff from expected dn-ds") + 
+  ggtitle("Sq diff from Expected dnds from each dataset")
+print (fig)
+
+fig <- ggplot(dnds, aes(y=SqDist_dn_minus_dS, color=File, x=File)) + 
+  geom_boxplot()  + 
+  guides(color=FALSE) + 
+  ylab("Sq diff from expected dn-ds") + 
+  xlab("Dataset") + 
+  ggtitle("sq diff from Expected dnds from each dataset")
+print (fig)
+
+#' Plot diff from expected values from each file
+#+ fig.width=15, fig.height=12
+fig <- ggplot(dnds, aes(x=CodonSite, y=SqDist_dn_minus_dS, color=File)) +   
+  geom_line() + 
+  xlab("CodonSite") + 
+  ylab("Sq Diff from Expected dn-ds")+ 
+  ggtitle("Sq diff from Expected dnds from each dataset")
+
+sm_fig <- ggplot(dnds, aes(x=CodonSite, y=SqDist_dn_minus_dS, color=File)) +   
+  geom_smooth(se=FALSE) + 
+  xlab("CodonSite") + 
+  ylab("Sq Diff from Expected dn-ds")+ 
+  ggtitle("Sq diff from Expected dnds from each dataset, smoothed")
+
+exp_fig <- ggplot(dnds, aes(x=CodonSite, y=dN_minus_dS.Exp, color=File)) +   
+  geom_smooth(se=FALSE) + 
+  xlab("CodonSite") + 
+  ylab("Expected dn-ds")+ 
+  ggtitle("Expected dn-ds from each dataset, smoothed")
+
+
+list_gps <- AlignPlots(fig, sm_fig, exp_fig)
+do.call(grid.arrange, args=c(list_gps, ncol=1))
+
 #' Plot actual versus expected
 fig <- ggplot(gooddnds[!is.na(gooddnds$dNdS.Exp) & !is.na(gooddnds$dNdS.Act), ], aes(x=dNdS.Exp, y=dNdS.Act)) + 
   geom_point(alpha=0.5, shape=1) + 
@@ -157,16 +266,26 @@ fig <- ggplot(gooddnds[!is.na(gooddnds$dNdS.Exp) & !is.na(gooddnds$dNdS.Act), ],
   ggtitle("Scatterplot Expected vs Inferred dN/dS, Excl Sites with Only Ambig Subs")
 print(fig)
 
-fig <- ggplot(gooddnds[!is.na(gooddnds$dN_minus_dS.Exp) & !is.na(gooddnds$dN_minus_dS.Act), ], aes(x=dN_minus_dS.Exp, y=dN_minus_dS.Act)) + 
+#+ fig.width=12, fig.height=12
+fig <- ggplot(gooddnds[!is.na(gooddnds$dN_minus_dS.Exp) & !is.na(gooddnds$dN_minus_dS.Act), ], aes(x=dN_minus_dS.Exp, y=dN_minus_dS.Act, color=File)) + 
   geom_point(alpha=0.5, shape=1) + 
-  geom_smooth(method="lm", color="Red") + 
+  #geom_smooth(method="lm", color="Red") + 
+  geom_smooth(method="lm") + 
   xlab("\nExpected dN-dS") + 
   ylab("Inferred dN-dS\n") + 
   ggtitle("Scatterplot Expected vs Inferred dN-dS,Excl Sites with Only Ambig Subs")
 print(fig)
 
 
-
+#+ fig.width=12, fig.height=12
+fig <- ggplot(dnds[!is.na(dnds$dN_minus_dS.Exp) & !is.na(dnds$dN_minus_dS.Act), ], aes(x=dN_minus_dS.Exp, y=dN_minus_dS.Act, color=File)) + 
+  geom_point(alpha=0.5, shape=1) + 
+  #geom_smooth(method="lm", color="Red") + 
+  geom_smooth(method="lm", se=FALSE) + 
+  xlab("\nExpected dN-dS") + 
+  ylab("Inferred dN-dS\n") + 
+  ggtitle("Scatterplot Expected vs Inferred dN-dS")
+print(fig)
 
 #' 
 #' GLM for Predictors for Umberjack Accuracy

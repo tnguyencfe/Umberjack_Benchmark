@@ -30,7 +30,9 @@ NUM_NAMES <- c("Window_Start",
                "dN_minus_dS.Act",
                "TreeLen.Act",
                "TreeDepth.Act",
+               "TreeDist.Act",
                "TreeDistPerRead.Act",
+               "Polytomy.Act",
                "ConserveCodon.Exp",
                "EntropyCodon.Exp",
                "N.Exp",
@@ -58,7 +60,8 @@ COVAR_NAMES <- NUM_NAMES[!NUM_NAMES %in%
                          ]
 
 # These variables apply to the entire window not just a window-codon site
-WINDOW_COVAR_NAMES <- c("BreakRatio.Act", "TreeLen.Act", "TreeDepth.Act", "TreeDistPerRead.Act", "Cov.Act",
+WINDOW_COVAR_NAMES <- c("BreakRatio.Act", "Window_Breaks", "TreeLen.Act", "TreeDepth.Act", "TreeDist.Act", "TreeDistPerRead.Act", 
+                        "Cov.Act", "Polytomy.Act",
                         "Window_Entropy.Act", "Window_UnambigCodonRate.Act", "Window_ErrPerCodon.Act", "Window_Subst.Act")
 
 # These variables apply only to specific window-codon site
@@ -76,6 +79,10 @@ nice <- function(name) {
     return ("Only Ambig Window Phylogney Subs")
   } else if (name == "BreakRatio.Act") {
     return ("Metric of window breakpoints & \ncloseness to centre of window")
+  } else if (name == "Window_Breaks") {
+    return ("Recombination Breaks in Window")
+  } else if (name == "Genome_Breaks") {
+    return ("Recombination Breaks in Genome")
   } else if (name == "UnambigCodonRate.Act") {
     return ("Window-Site Unambiguous Codons Per Read")
   } else if (name == "AADepth.Act") {
@@ -96,6 +103,8 @@ nice <- function(name) {
     return ("Window Tree Depth (Subs/Site)")
   } else if (name == "TreeDistPerRead.Act") {
     return ("Ave Robinson Foulds (Window Tree, Expected Tree) \n Weighted By Genome Width Covered By Expected Tree\nNormalized by Total Reads")
+  } else if (name == "TreeDist.Act") {
+    return ("Ave Robinson Foulds (Window Tree, Expected Tree) \n Weighted By Genome Width Covered By Expected Tree")
   } else if (name == "EntropyCodon.Exp") {
     return ("True Population Site Codon Entropy")
   } else if (name == "N.Exp") {
@@ -170,27 +179,26 @@ get_all_sim_dnds <- function(dnds_filename=NULL) {
   
   dnds <- merge(x=dnds, y=per_window_ave, by=c("File", "Window_Start"), all=TRUE, sort=TRUE)
   
+  # Check that if a codon site in a dataset is a breakpoint, it's reported as a breakpoint in all the windows for that dataset
+  uniq_breaks_per_codon <- aggregate(Is_Break ~ File + CodonSite, data=dnds, 
+                                FUN=function(x) {return (length(unique(x)))})
+  if (sum(uniq_breaks_per_codon$Is_Break > 1) > 0) {
+    print(head(uniq_breaks_per_codon[uniq_breaks_per_codon$Is_Break > 1,]))
+    stop("Codon Site in dataset is reported as both breakpoint and non-breakpoint")
+  }
   
-#   # Count breakpoints per window
-#   breaks_per_win <- aggregate(Is_Break ~ File + Window_Start, data=dnds, FUN=sum)
-#   
-#   breaks_per_codon <- aggregate(Is_Break ~ File + CodonSite, data=dnds, 
-#                                 FUN=function(x) {
-#     #result <- unique(x)
-# #     if (length (result) > 1) {
-# #       stop("Wrong")
-# #     }
-# #     return (result)
-#     return (sum(x))                                  
-#     })
-# 
-#   breaks_per_site <- aggregate(Is_Break ~ File + CodonSite, data=dnds, FUN=function(x) {unique(x)})
-#   breaks_per_genome <- aggregate(Is_Break ~ File, data=breaks_per_site, FUN=sum)
+  # Count breakpoints per window
+  breaks_per_win <- aggregate(Is_Break ~ File + Window_Start, data=dnds, FUN=sum)
+  colnames(breaks_per_win)[grep("Is_Break", colnames(breaks_per_win))] <- "Window_Breaks"
+  
+  dnds <- merge(x=dnds, y=breaks_per_win, all=TRUE, sort=TRUE)
+  
+  # Count breakpoints per genome
+  breaks_per_site <- aggregate(Is_Break ~ File + CodonSite, data=dnds, FUN=function(x){unique(x)})
+  breaks_per_genome <- aggregate(Is_Break ~ File, data=breaks_per_site, FUN=sum)
+  colnames(breaks_per_genome)[grep("Is_Break", colnames(breaks_per_genome))] <- "Genome_Breaks"
 
-  
-  dim(dnds)
-  summary(dnds)
-  
+  dnds <- merge(x=dnds, y=breaks_per_genome, all=TRUE, sort=TRUE)
   
 #   # Do not remove window-codonsites where there is no dnds and no dn-ds information because of insufficient window sequences.
 #   # But do remove window codon sites in which there are no true dn/ds because of zero synonymous substitutions.
@@ -219,19 +227,6 @@ get_all_sim_dnds <- function(dnds_filename=NULL) {
   dnds$wrongSelect <- FALSE
   dnds$wrongSelect <- as.factor((dnds$dN_minus_dS.Act < 0 & dnds$dN_minus_dS.Exp > 0) | (dnds$dN_minus_dS.Act > 0 & dnds$dN_minus_dS.Exp < 0))
   dnds$wrongSelect[is.na(dnds$wrongSelect)] <- TRUE
-
-
-  # When we compare umberjack dnds against variables that affect entire windows (as opposed to window-codon sites),
-  # we need to use umberjack dnds averaged across window to avoid excess noise
-  window <- ddply(.data=dnds,
-                  .variables=c("File", "Window_Start"),
-                  .fun=function(x) {
-                    
-                  })
-
-  print(dim(dnds))  
-  print(summary(dnds))  
-  head(dnds)
   
   return (dnds)
 }

@@ -25,12 +25,12 @@ LOGGER.propagate = 1
 
 PROCS = 6
 
-def get_tree_len_depth(treefilename):
+def get_tree_len_depth(treefilename, polytomy_brlen_thresh=0):
     """
     Returns tuple of (sum of all branch lengths in tree (excluding root branch), deepest root to tip distance)
     :param treefilename:
-    :return: total branch length sum of tree (excluding root branch), deepest root to tip distance
-    :rtype: (float, float)
+    :return: total branch length sum of tree (excluding root branch), deepest root to tip distance, total polytomies
+    :rtype: (float, float, int)
     """
     tree = Phylo.read(treefilename, "newick")
 
@@ -40,12 +40,16 @@ def get_tree_len_depth(treefilename):
     clade_depths = tree.depths()
     longest_depth = 0.0
 
+    total_polytomies = 0
     for clade, depth in clade_depths.iteritems():
         if clade.is_terminal():
             if longest_depth < depth:
                 longest_depth = depth
+        if clade.branch_length <= polytomy_brlen_thresh:
+            total_polytomies += len(clade.clades)
 
-    return unroot_tree_len, longest_depth
+
+    return unroot_tree_len, longest_depth, total_polytomies
 
 
 def get_break_ratio(sim_data, win_start, win_end):
@@ -113,6 +117,7 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
                                             "TreeDist",  # distance from actual to expected tree
                                             "Is_Break",  # Whether a strand switch starts on this codon site
                                             "BreakRatio",  # sum across window breakpoints (ratio of bases on either side of breakpoint)
+                                            "Polytomy"  # total polytomies in tree
                                 ]
         )
         writer.writeheader()
@@ -137,15 +142,21 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
 
             break_ratio = get_break_ratio(sim_data=sim_data, win_start=win_start_nuc_pos_1based_wrt_ref, win_end=win_end_nuc_pos_1based_wrt_ref)
 
+            consensus = Utility.Consensus()
+            consensus.parse(slice_fasta_filename)
+            codon_width = consensus.get_alignment_len()/Utility.NUC_PER_CODON # if the last codon doesn't have enuf chars, then hyphy ignores it
+
             tree_len = None
             tree_depth = None
             tree_dist = None
+            total_polytomies = None
             slice_tree_filename = slice_fasta_fileprefix + ".nwk"
             if os.path.exists(slice_tree_filename):
                 # NB:  FastTree tree length in nucleotide substitutions / site.
                 # HyPhy converts trees to codon substitution/site to count codon substitutions along phylogeny
                 # Parse the HyPhy dnds tsv to get dN, dS,
-                tree_len, tree_depth = get_tree_len_depth(slice_tree_filename)
+                polytomy_brlen_thresh = 1.0/(3 * codon_width)  # branch length treshold below which node is considered polytomy
+                tree_len, tree_depth, total_polytomies = get_tree_len_depth(slice_tree_filename, polytomy_brlen_thresh=polytomy_brlen_thresh)
 
                 # If there is recombination, there may be multiple trees.
                 # Use the full population tree corresponding to slice portion of the genome.
@@ -155,10 +166,6 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
                                                                win_start=win_start_nuc_pos_1based_wrt_ref,
                                                                win_end=win_end_nuc_pos_1based_wrt_ref)
 
-            consensus = Utility.Consensus()
-            consensus.parse(slice_fasta_filename)
-
-            codon_width = consensus.get_alignment_len()/Utility.NUC_PER_CODON # if the last codon doesn't have enuf chars, then hyphy ignores it
 
             (seq_err, err_aa_change, err_aa_nochange,
              ambig_aa_change, ambig_aa_nochange) = error_by_codonpos(slice_fasta_filename,
@@ -206,14 +213,18 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
                     outrow["TreeDepth"] = tree_depth
                     outrow["TreeDist"] = tree_dist
 
+
                     outrow["Is_Break"] = 0
                     for nuc_strand_start_wrt_ref_base1, nuc_strand_end_wrt_ref_base1 in full_popn_breaks:
                         nuc_pos_wrt_ref_base1 = win_start_nuc_pos_1based_wrt_ref + nucoffset_0based
                         # If there are no recombination breaks, full_popn_breaks still contains the full genome as a contiguous section
-                        if len(full_popn_breaks) > 1 and nuc_pos_wrt_ref_base1 == nuc_strand_start_wrt_ref_base1:
+                        # Don't consider first position as breakpoint
+                        if len(full_popn_breaks) > 1 and nuc_pos_wrt_ref_base1 == nuc_strand_start_wrt_ref_base1 > 1:
                             outrow["Is_Break"] = 1
 
                     outrow["BreakRatio"] = break_ratio
+                    outrow["Polytomy"] = total_polytomies
+
 
                     if reader:
                         dnds_info = reader.next()  # Every codon site is a row in the *.dnds.tsv file
@@ -393,6 +404,7 @@ def make1csv(output_csv_filename, sim_args_tsv):
                                                     "dN_minus_dS.Act",
                                                     "TreeLen.Act",  # length of window tree in nucleotide subs/site
                                                     "TreeDepth.Act",  # depth of longest branch in nucleotide subs/site
+                                                    "Polytomy.Act",  # total polytomies in tree
                                                     # distance from actual to expected tree in Robinson Foulds-branch lengths /reads
                                                     "TreeDistPerRead.Act",
                                                     "ConserveCodon.Exp",
@@ -481,6 +493,8 @@ def make1csv(output_csv_filename, sim_args_tsv):
                             outrow["TreeDistPerRead.Act"] = float(row["TreeDist"])/float(row["Reads"])
                         outrow["Is_Break"] = row["Is_Break"]
                         outrow["BreakRatio.Act"] = row["BreakRatio"]
+                        outrow["Polytomy.Act"] = row["Polytomy"]
+
 
 
                         if not codonsite_2_full_cons.get(codonsite):
@@ -505,189 +519,6 @@ def make1csv(output_csv_filename, sim_args_tsv):
 
                         writer.writerow(outrow)
 
-
-# def make1csv(inferred_dnds_dir, sim_data_dir, output_csv_filename, sim_args_tsv):
-#     """
-#     Puts all the collate_dnds, full population csv, expected dnds info into 1 csv for checking what causes inaccurate
-#     inferred dn/ds.
-#     Careful - there is about 514MB worth of collatednds csv data
-#     :return:
-#     """
-#     FullPopnCons = namedtuple("FullPopnCons", ["Conservation", "Entropy"])
-#     FullPopnDnDs = namedtuple("FullPopnDnDs", ["N", "S", "EN", "ES", "dNdS", "dN_minus_dS"])
-#
-#     LOGGER.debug("Writing all collated inferred, expected dnds to " + output_csv_filename)
-#     with open(output_csv_filename, 'w') as fh_out:
-#         writer = csv.DictWriter(fh_out, fieldnames=["Window_Start",
-#                                                     "Window_End",
-#                                                     "CodonSite",
-#                                                     "File",
-#                                                     "Reads.Act", # max read depth for entire slice
-#                                                     "UnambigCodonRate.Act", # Total unambiguous codon (depth) at the codon site / max read depth for entire slice
-#                                                     "AADepth.Act",  # Total codons that code for only 1 amino acid at the codon site
-#                                                     "PopSize.Act",  # Population size
-#                                                     "ConserveCodon.Act",
-#                                                     "EntropyCodon.Act",  # Excludes codons with N's and gaps
-#                                                     "UnknownPerCodon.Act",  # Average N or gaps per codon at this site
-#                                                     "ErrPerCodon.Act",  # Average erroneous bases per codon at this site
-#                                                     "N.Act", "S.Act",
-#                                                     "EN.Act", "ES.Act",
-#                                                     "dNdS.Act",
-#                                                     "dN_minus_dS.Act",
-#                                                     "TreeLen.Act",  # length of window tree in nucleotide subs/site
-#                                                     "TreeDepth.Act",  # depth of longest branch in nucleotide subs/site
-#                                                     "TreeDist.Act", # distance from actual to expected tree in Robinson Foulds
-#                                                     "ConserveCodon.Exp",
-#                                                     "EntropyCodon.Exp",
-#                                                     "N.Exp", "S.Exp",
-#                                                     "EN.Exp", "ES.Exp",
-#                                                     "dNdS.Exp",
-#                                                     "dN_minus_dS.Exp"
-#                                                     ])
-#
-#         writer.writeheader()
-#
-#
-#         popn_groups, umberjack_group_to_args = simulator.parse_sim_args_tsv(sim_args_tsv)
-#         args_itr = []
-#         for umberjackgroup, popn_groups_per_ugroup in umberjack_group_to_args.iteritems():
-#             for popn_group in popn_groups_per_ugroup:
-#                 # /home/thuy/gitrepo/Umberjack_Benchmark/simulations/data/simdatasetname
-#                 sim_popn_name = popn_group.test_prefix
-#                 sim_data_dir = simulator.get_sim_dataset_dir(popn_group)
-#
-#                 #/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/window350.breadth0.6.depth100.0.qual20/simdatasetname/consensus/collate_dnds.csv
-#                 sam_ref_outdir = simulator.get_sample_ref_outdir(umberjackgroup, popn_group)
-#                 inferred_collate_dnds_csv = sam_ref_outdir + os.sep + "collate_dnds.csv"
-#
-#                 LOGGER.debug("Merge sim_name=" + sim_popn_name + " collatednds=" + inferred_collate_dnds_csv)
-#
-#                 # # /home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/small.cov2.indiv3000.codon500/consensus/window200.breadth0.75.depth300.0
-#                 # sim_popn_name = os.path.basename(os.path.abspath(dirpath + os.sep + os.pardir + os.sep + os.pardir))
-#                 # window_traits = os.path.basename(dirpath)
-#                 #
-#                 # LOGGER.debug("sim_popn_name=" + sim_popn_name)
-#                 #
-#                 #
-#                 # breadth = None
-#                 # depth = None
-#                 # indiv = None
-#                 # indiv_match = re.search(pattern=r"\.indiv(\d+)\.", string=sim_popn_name)
-#                 # if indiv_match:
-#                 #     indiv = int(indiv_match.group(1))
-#                 # else:
-#                 #     raise ValueError("Sim name doesn't obey convention " + sim_popn_name)
-#                 #
-#                 #
-#                 # window_matches = re.search(pattern=r"\.breadth(0\.\d+)\.depth(\d+)", string=window_traits)
-#                 # if window_matches:
-#                 #     breadth = float(window_matches.group(1))
-#                 #     depth = float(window_matches.group(2))/indiv
-#                 # else:
-#                 #     raise ValueError("Window traits dir name doesn't obey convention " + window_traits)
-#
-#
-#                 # /home/thuy/gitrepo/Umberjack_Benchmark/simulations/data/simdatasetname/subs/simdatasetname.dnds.tsv
-#                 full_popn_dnds_tsv = sim_data_dir + os.sep + "subs" + os.sep + sim_popn_name + ".dnds.tsv"
-#                 # /home/thuy/gitrepo/Umberjack_Benchmark/simulations/data/simdatasetname/fullpopn/simdatasetname.conserve.csv
-#                 full_popn_conserve_csv = sim_data_dir + os.sep + "fullpopn" + os.sep + sim_popn_name + ".conserve.csv"
-#                 full_popn_fasta = sim_data_dir + os.sep + sim_popn_name + os.sep + "mixed" + os.sep + sim_popn_name + ".mixed.fasta"
-#
-#                 total_indiv = Utility.get_total_seq_from_fasta(full_popn_fasta)
-#
-#                 #NucSite	Conserve	Entropy	NucDepth	CodonDepth
-#
-#                 codonsite_2_full_cons= dict()
-#                 with open(full_popn_conserve_csv, 'rU') as fh_full_cons:
-#                     full_cons_reader = csv.DictReader(fh_full_cons)
-#
-#                     total_cons = 0.0
-#                     total_ent = 0.0
-#                     for row_idx, row in enumerate(full_cons_reader):
-#                         nucsite = int(row["NucSite"])
-#                         total_cons += float(row["Conserve"])
-#                         total_ent += float(row["Entropy"])
-#                         if nucsite-1 != row_idx:
-#                             raise ValueError("Error in nuc site indexing in " + full_popn_conserve_csv)
-#                         if nucsite % 3 == 0:
-#                             codonsite = nucsite/3
-#                             codon_ave_cons = total_cons/3.0
-#                             codon_ave_ent = total_ent/3.0 / math.log(total_indiv)  # hack because full population conserve.csv are shannon entropy not metric entropy
-#                             full_popn_cons = FullPopnCons(Conservation=codon_ave_cons, Entropy=codon_ave_ent)
-#                             codonsite_2_full_cons[codonsite] = full_popn_cons
-#                             total_cons = 0.0
-#                             total_ent = 0.0
-#
-#                 # Observed S Changes	Observed NS Changes	E[S Sites]	E[NS Sites]	Observed S. Prop.	P{S}	dS	dN	dN-dS	P{S leq. observed}	P{S geq. observed}	Scaled dN-dS
-#                 codonsite_2_full_dnds= dict()
-#                 with open(full_popn_dnds_tsv, 'rU') as fh_full_dnds:
-#                     full_dnds_reader = csv.DictReader(fh_full_dnds, delimiter="\t")
-#                     for row_idx, row in enumerate(full_dnds_reader):
-#                         codonsite = row_idx+1
-#                         if float(row[hyphy_handler.HYPHY_TSV_DS_COL]):
-#                             dnds = float(row[hyphy_handler.HYPHY_TSV_DN_COL])/float(row[hyphy_handler.HYPHY_TSV_DS_COL])
-#                         else:
-#                             dnds = None
-#                         dN_minus_dS = row[hyphy_handler.HYPHY_TSV_SCALED_DN_MINUS_DS_COL]
-#                         full_popn_dnds = FullPopnDnDs(N=row[hyphy_handler.HYPHY_TSV_N_COL], S=row[hyphy_handler.HYPHY_TSV_S_COL],
-#                                                       EN=row[hyphy_handler.HYPHY_TSV_EXP_N_COL], ES=row[hyphy_handler.HYPHY_TSV_EXP_S_COL],
-#                                                       dNdS=dnds, dN_minus_dS=dN_minus_dS)
-#                         codonsite_2_full_dnds[codonsite] = full_popn_dnds
-#
-#                 if len(codonsite_2_full_dnds.keys()) != len(codonsite_2_full_cons.keys()):
-#                     raise ValueError("full population dnds does not have same number of codon sites as conservation:",
-#                                      full_popn_dnds_tsv, ", ", full_popn_conserve_csv)
-#
-#
-#
-#                 #Window_Start, Window_End, Reads, CodonSite, CodonDepth, ConserveTrueBase, EntropyTrueBase, N, S, dN, dS, Ambig, Pad, Err
-#                 with open(inferred_collate_dnds_csv, 'rU') as fh_inf_dnds:
-#                     inf_dnds_reader = csv.DictReader(fh_inf_dnds)
-#                     for row_idx, row in enumerate(inf_dnds_reader):
-#                         codonsite = int(row["CodonSite"])
-#                         outrow = dict()
-#                         outrow["Window_Start"] = row["Window_Start"]
-#                         outrow["Window_End"] = row["Window_End"]
-#                         outrow["CodonSite"] = codonsite
-#                         outrow["File"] = inferred_collate_dnds_csv
-#                         outrow["Reads.Act"] = row["Reads"]
-#                         outrow["UnambigCodonRate.Act"] = float(row["CodonDepth"])/float(row["Reads"])
-#                         outrow["AADepth.Act"]  = row["AADepth"] if  row.get("AADepth") else None  # TODO: hack since some earlier simulations don't have this value
-#                         outrow["PopSize.Act"] = total_indiv
-#                         outrow["ConserveTrueBase.Act"] = row["ConserveTrueBase"]
-#                         outrow["EntropyTrueBase.Act"] = row["EntropyTrueBase"]
-#                         outrow["UnknownPerCodon.Act"] = (int(row["Ambig"]) + int(row["Pad"]))/float(row["Reads"])
-#                         outrow["ErrPerCodon.Act"] = int(row["Err"])/float(row["Reads"])
-#                         # If it never made it past FastTree into hyphy, then the substitutions will be empty string
-#                         if row["N"] != "" and row["S"] != "":
-#                             outrow["N.Act"] = float(row["N"])
-#                             outrow["S.Act"] = float(row["S"])
-#                             #outrow["EN.Act"] = float(row["EN"])
-#                             #outrow["ES.Act"] = float(row["ES"])
-#                             if row["dS"] and float(row["dS"]) != 0:
-#                                 outrow["dNdS.Act"] = float(row["dN"])/float(row["dS"])
-#
-#                             outrow["dN_minus_dS.Act"] = row["dN_minus_dS"]
-#                         outrow["TreeLen.Act"] = row["TreeLen"]
-#                         outrow["TreeDepth.Act"] = row["TreeDepth"]
-#                         outrow["TreeDist.Act"] = row["TreeDist"]
-#
-#
-#                         if not codonsite_2_full_cons.get(codonsite):
-#                             raise ValueError("Missing codon site" + str(codonsite) + " in " + full_popn_conserve_csv)
-#                         outrow["ConserveTrueBase.Exp"] = codonsite_2_full_cons[codonsite].Conservation
-#                         outrow["EntropyTrueBase.Exp"] = codonsite_2_full_cons[codonsite].Entropy
-#
-#                         if not codonsite_2_full_dnds.get(codonsite):
-#                             raise ValueError("Missing codon site" + str(codonsite) + " in " + inferred_collate_dnds_csv)
-#                         outrow["N.Exp"] = codonsite_2_full_dnds[codonsite].N
-#                         outrow["S.Exp"] = codonsite_2_full_dnds[codonsite].S
-#                         #outrow["EN.Exp"] = codonsite_2_full_dnds[codonsite].EN
-#                         #outrow["ES.Exp"] = codonsite_2_full_dnds[codonsite].ES
-#                         outrow["dNdS.Exp"] = codonsite_2_full_dnds[codonsite].dNdS
-#                         outrow["dN_minus_dS.Exp"] = codonsite_2_full_dnds[codonsite].dN_minus_dS
-#
-#                         writer.writerow(outrow)
 
 
 def collect_dnds_helper(args):
