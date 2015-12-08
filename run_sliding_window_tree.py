@@ -346,8 +346,7 @@ def gen_sim_data(config_file,
             seed = random.randint(0, MAX_SEED)
 
         LOGGER.debug("Creating simulation config " + config_file + " with seed " + str(seed))
-        if codonsites % len(scales) != 0:
-            raise ValueError("Number of scalings should divide evenly into number of codon sites")
+        
         #codons_per_block = codonsites / len(scales)
         with open(config_file, 'w') as fh_out:
             fh_out.write("[sim]\n")
