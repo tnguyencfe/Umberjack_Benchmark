@@ -33,7 +33,7 @@ CONCURRENT_MPIRUN = 3
 THREADS_PER_WINDOW = 4
 WINDOW_PROCS = 3
 WINDOW_SLIDE = 30
-PROCS = 20
+PROCS = 4
 
 MASK_STOP_CODON = True
 REMOVE_DUPLICATES = True
@@ -346,7 +346,7 @@ def gen_sim_data(config_file,
             seed = random.randint(0, MAX_SEED)
 
         LOGGER.debug("Creating simulation config " + config_file + " with seed " + str(seed))
-        
+
         #codons_per_block = codonsites / len(scales)
         with open(config_file, 'w') as fh_out:
             fh_out.write("[sim]\n")
@@ -677,6 +677,7 @@ def mpi_create_datasets(sim_args_tsv):
 
 if __name__ == "__main__":
 
+    LOGGER.info("here")
     sim_args_tsv = sys.argv[1]
     concur_mpi = CONCURRENT_MPIRUN
     if len(sys.argv) >= 2:
