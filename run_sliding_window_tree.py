@@ -363,9 +363,9 @@ def gen_sim_data(config_file,
             fh_out.write("SELECTION_RATE={}\n".format(selection_rate))
             fh_out.write("GENERATIONS={}\n".format(generations))
 
-            fh_out.write("INDELIBLE_BIN_DIR= ../../../../../SlidingWindow/test/simulations/bin/indelible/indelible_1.03/linux_x64\n")
+            fh_out.write("INDELIBLE_BIN_DIR= ../../../../SlidingWindow/test/simulations/bin/indelible/indelible_1.03/linux_x64\n")
             fh_out.write("INDELIBLE_SCALING_RATES={}\n".format(",".join([str(x) for x in scales])))
-            fh_out.write("ART_BIN_DIR = ../../../../../SlidingWindow/test/simulations/bin/art/art_3.19.15_adapter/linux_x64\n")
+            fh_out.write("ART_BIN_DIR = ../../../../SlidingWindow/test/simulations/bin/art/art_3.19.15_adapter/linux_x64\n")
             fh_out.write("ART_QUAL_PROFILE_TSV1 = {}R1.txt\n".format(art_profile))
             fh_out.write("ART_QUAL_PROFILE_TSV2 = {}R2.txt\n".format(art_profile))
             fh_out.write("ART_FOLD_COVER={}\n".format(cov_depth))
@@ -378,12 +378,12 @@ def gen_sim_data(config_file,
             fh_out.write("ART_DEL_RATE2 = 0.00045\n")
             fh_out.write("ART_QUAL_SHIFT1 = 0\n")
             fh_out.write("ART_QUAL_SHIFT2 = 0\n")
-            fh_out.write("PICARD_BIN_DIR = ../../../../../SlidingWindow/test/simulations/bin/picard/picard_1.129\n")
-            fh_out.write("BWA_BIN_DIR = ../../../../../SlidingWindow/test/simulations/bin/bwa/bwa_0.7.12/linux_x64\n")
+            fh_out.write("PICARD_BIN_DIR = ../../../../SlidingWindow/test/simulations/bin/picard/picard_1.129\n")
+            fh_out.write("BWA_BIN_DIR = ../../../../SlidingWindow/test/simulations/bin/bwa/bwa_0.7.12/linux_x64\n")
             fh_out.write("PROCS = {}\n".format(PROCS))
-            fh_out.write("FASTTREE_EXE = ../../../../../SlidingWindow/test/simulations/bin/fasttree/fasttree_2.1.7/linux_x64/FastTree\n")
-            fh_out.write("HYPHY_EXE = ../../../../../SlidingWindow/test/simulations/bin/hyphy/hyphy_2.2.3/linux_x64/HYPHYMP\n")
-            fh_out.write("HYPHY_BASEPATH = ../../../../../SlidingWindow/test/simulations/bin/hyphy/hyphy_2.2.3/res/TemplateBatchFiles\n")
+            fh_out.write("FASTTREE_EXE = ../../../../SlidingWindow/test/simulations/bin/fasttree/fasttree_2.1.7/linux_x64/FastTree\n")
+            fh_out.write("HYPHY_EXE = ../../../../SlidingWindow/test/simulations/bin/hyphy/hyphy_2.2.3/linux_x64/HYPHYMP\n")
+            fh_out.write("HYPHY_BASEPATH = ../../../../SlidingWindow/test/simulations/bin/hyphy/hyphy_2.2.3/res/TemplateBatchFiles\n")
 
 
 
