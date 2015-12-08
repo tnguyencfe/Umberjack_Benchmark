@@ -1,8 +1,9 @@
 FieldName,Min,Max,Is_Int,Notes
-Cover,0.2,8,0,Coverage per Individual.  Values selected on log scale.
+Cover,-1,3,0,Coverage per Individual.   2**coverage
 FragLenAve,104,500,1,
-FragLenStd,50,100,1,
-MutationRate,3.4e-5,0.001,0,Nucleotide Mutation Rate Per Generation.  Total Tree Length = MutationRate * total branches
-RecomboRate,0.003,0.013,0,Recombinations Per Codon
-TotalMutRates,1,3,1,
-Generations,300,7300,1,HIV Generation = 1 day
+RecomboRate,0,0.013,0,Recombinations Per Codon of Final Genome (not per individual genome)
+Generations,8,13,0,HIV Generation = 1 day.  2**generations
+MutationRate1,2.191e-7,8.41E-006,0,Subs Per Site Across Tree Per Generation Per Indiv.  Final Tree Length = MutationRate * total generations * total indiv
+MutationRate2,2.191e-7,8.41E-006,0,Each dataset genome has 3 different mutation rates
+MutationRate3,2.191e-7,8.41E-006,0,
+UmberjackConfig,0,1,1,Use either of the umberjack configs
