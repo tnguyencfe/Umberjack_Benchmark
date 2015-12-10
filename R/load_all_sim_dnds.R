@@ -33,6 +33,7 @@ NUM_NAMES <- c("Window_Start",
                "TreeDist.Act",
                "TreeDistPerRead.Act",
                "Polytomy.Act",
+               "P_SameCodonFreq.Act",
                "ConserveCodon.Exp",
                "EntropyCodon.Exp",
                "N.Exp",
@@ -61,7 +62,7 @@ COVAR_NAMES <- NUM_NAMES[!NUM_NAMES %in%
 
 # These variables apply to the entire window not just a window-codon site
 WINDOW_COVAR_NAMES <- c("BreakRatio.Act", "Window_Breaks", "TreeLen.Act", "TreeDepth.Act", "TreeDist.Act", "TreeDistPerRead.Act", 
-                        "Cov.Act", "Polytomy.Act",
+                        "Cov.Act", "Polytomy.Act", "Reads.Act", "WinP_SameCodonFreq.Act",
                         "Window_Entropy.Act", "Window_UnambigCodonRate.Act", "Window_ErrPerCodon.Act", "Window_Subst.Act")
 
 # These variables apply only to specific window-codon site
@@ -137,6 +138,8 @@ nice <- function(name) {
     return ("|(inferred window site dn-ds) - (expected site dn-ds)|\nAve Across Window")
   } else if (name == "WinSqDist_dn_minus_dS") {
     return ("[(inferred window site dn-ds) - (expected site dn-ds)] ^2\n Ave Across Window")
+  } else {
+    return (name)
   }
 }
   
@@ -162,6 +165,11 @@ get_all_sim_dnds <- function(dnds_filename=NULL) {
   dnds$Cov.Act <- dnds$Reads.Act/dnds$PopSize.Act  
   dnds$IsLowSubst.Act <- as.factor((dnds$N.Act > 0 & dnds$N.Act < 1) | (dnds$S.Act > 0 & dnds$S.Act < 1))
   
+  if (all(0 <= dnds$P_SameCodonFreq) & all(dnds$P_SameCodonFreq <= 1))  # we want log10 probabilities
+  {
+    dnds$P_SameCodonFreq <- log10(dnds$P_SameCodonFreq + PSEUDOCOUNT)
+  }
+  
   if (!"TreeDist.Act"  %in% colnames(dnds)) {
     dnds$TreeDist.Act <- dnds$TreeDistPerRead.Act * dnds$Reads.Act
   }
@@ -172,7 +180,8 @@ get_all_sim_dnds <- function(dnds_filename=NULL) {
                             data.frame(Window_Entropy.Act=mean(x$EntropyCodon.Act, na.rm=TRUE),
                                        Window_UnambigCodonRate.Act=mean(x$UnambigCodonRate.Act, na.rm=TRUE),
                                        Window_ErrPerCodon.Act=mean(x$ErrPerCodon.Act, na.rm=TRUE),
-                                       Window_Subst.Act=mean(x$Subst.Act, na.rm=TRUE)
+                                       Window_Subst.Act=mean(x$Subst.Act, na.rm=TRUE),
+                                       WinP_SameCodonFreq.Act=mean(x$P_SameCodonFreq.Act, na.rm=TRUE)
                                        )
                           })
   
@@ -233,7 +242,7 @@ get_all_sim_dnds <- function(dnds_filename=NULL) {
 
 get_window_sim_dnds <- function(dnds) {
   # When we compare umberjack dnds against variables that affect entire windows (as opposed to window-codon sites),
-  # we need to use umberjack dnds averaged across window to avoid excess noise when plotting\
+  # we need to use umberjack dnds averaged across window to avoid excess noise when plotting
   
   if (is.null(dnds)) {
     dnds <- get_all_sim_dnds()
@@ -244,6 +253,8 @@ get_window_sim_dnds <- function(dnds) {
   colnames(window_means)[grep("AbsLOD_dNdS", colnames(window_means))] <- "WinAbsLOD_dNdS"
   colnames(window_means)[grep("AbsDist_dn_minus_dS", colnames(window_means))] <- "WinAbsDist_dn_minus_dS"
   colnames(window_means)[grep("SqDist_dn_minus_dS", colnames(window_means))] <- "WinSqDist_dn_minus_dS"
+  
+  
   
   vars_formula <- as.formula(paste0(
     "cbind(",

@@ -13,12 +13,14 @@ import logging
 import multiprocessing
 import subprocess
 import Bio.Phylo as Phylo
-from test_topology import TestTopology
+from test.test_topology import TestTopology
 settings.setup_logging()
 import tempfile
 import run_sliding_window_tree as simulator
 from argparse import ArgumentParser
 from test.simulations.SimData import SimData
+import scipy.stats
+
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.propagate = 1
@@ -45,8 +47,11 @@ def get_tree_len_depth(treefilename, polytomy_brlen_thresh=0):
         if clade.is_terminal():
             if longest_depth < depth:
                 longest_depth = depth
-        if clade.branch_length <= polytomy_brlen_thresh:
-            total_polytomies += len(clade.clades)
+        if not clade.branch_length or clade.branch_length < polytomy_brlen_thresh:
+            if clade.is_terminal():
+                total_polytomies += 1
+            # else:
+            #     total_polytomies += len(clade.clades)
 
 
     return unroot_tree_len, longest_depth, total_polytomies
@@ -117,7 +122,8 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
                                             "TreeDist",  # distance from actual to expected tree
                                             "Is_Break",  # Whether a strand switch starts on this codon site
                                             "BreakRatio",  # sum across window breakpoints (ratio of bases on either side of breakpoint)
-                                            "Polytomy"  # total polytomies in tree
+                                            "Polytomy",  # total polytomies in tree
+                                            "P_SameCodonFreq"  # log10 probability that sliced codon frequency distro is same as full population distro
                                 ]
         )
         writer.writeheader()
@@ -142,9 +148,9 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
 
             break_ratio = get_break_ratio(sim_data=sim_data, win_start=win_start_nuc_pos_1based_wrt_ref, win_end=win_end_nuc_pos_1based_wrt_ref)
 
-            consensus = Utility.Consensus()
-            consensus.parse(slice_fasta_filename)
-            codon_width = consensus.get_alignment_len()/Utility.NUC_PER_CODON # if the last codon doesn't have enuf chars, then hyphy ignores it
+            slice_aln = Utility.Consensus()
+            slice_aln.parse(slice_fasta_filename)
+            codon_width = slice_aln.get_alignment_len()/Utility.NUC_PER_CODON # if the last codon doesn't have enuf chars, then hyphy ignores it
 
             tree_len = None
             tree_depth = None
@@ -172,6 +178,8 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
                                                                      win_start_nuc_pos_1based_wrt_ref,
                                                                      full_popn_fasta)
 
+            full_popn_aln = Utility.Consensus()
+            full_popn_aln.parse(full_popn_fasta)
 
             dnds_tsv_filename = slice_fasta_fileprefix + ".dnds.tsv"
             fh_dnds_tsv = None
@@ -186,24 +194,24 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
                     outrow = dict()
                     outrow["Window_Start"] = win_start_nuc_pos_1based_wrt_ref
                     outrow["Window_End"] = win_end_nuc_pos_1based_wrt_ref
-                    outrow["Reads"] = consensus.get_total_seqs()
+                    outrow["Reads"] = slice_aln.get_total_seqs()
                     outrow["CodonSite"] = win_start_codon_1based_wrt_ref + codonoffset_0based
-                    outrow["CodonDepth"] = consensus.get_codon_depth(codon_pos_0based=codonoffset_0based,
+                    outrow["CodonDepth"] = slice_aln.get_codon_depth(codon_pos_0based=codonoffset_0based,
                                                                      is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
-                    outrow["AADepth"] = consensus.get_unambig_codon2aa_depth(codon_pos_0based=codonoffset_0based)
-                    outrow["ConserveCodon"] = consensus.get_codon_conserve(codonoffset_0based,
+                    outrow["AADepth"] = slice_aln.get_unambig_codon2aa_depth(codon_pos_0based=codonoffset_0based)
+                    outrow["ConserveCodon"] = slice_aln.get_codon_conserve(codonoffset_0based,
                                                                               is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
-                    outrow["EntropyCodon"] = consensus.get_codon_shannon_entropy(codonoffset_0based,
+                    outrow["EntropyCodon"] = slice_aln.get_codon_shannon_entropy(codonoffset_0based,
                                                                                         is_count_ambig=False, is_count_gaps=False, is_count_pad=False)
-                    outrow["Ambig"] = (consensus.get_ambig_count(pos_0based=nucoffset_0based) +
-                                               consensus.get_ambig_count(pos_0based=nucoffset_0based+1) +
-                                               consensus.get_ambig_count(pos_0based=nucoffset_0based+2))
-                    outrow["Pad"] = (consensus.get_pad_count(pos_0based=nucoffset_0based) +
-                                     consensus.get_pad_count(pos_0based=nucoffset_0based+1) +
-                                     consensus.get_pad_count(pos_0based=nucoffset_0based+2))
-                    outrow["Gap"] = (consensus.get_gap_count(pos_0based=nucoffset_0based) +
-                                     consensus.get_gap_count(pos_0based=nucoffset_0based+1) +
-                                     consensus.get_gap_count(pos_0based=nucoffset_0based+2))
+                    outrow["Ambig"] = (slice_aln.get_ambig_count(pos_0based=nucoffset_0based) +
+                                               slice_aln.get_ambig_count(pos_0based=nucoffset_0based+1) +
+                                               slice_aln.get_ambig_count(pos_0based=nucoffset_0based+2))
+                    outrow["Pad"] = (slice_aln.get_pad_count(pos_0based=nucoffset_0based) +
+                                     slice_aln.get_pad_count(pos_0based=nucoffset_0based+1) +
+                                     slice_aln.get_pad_count(pos_0based=nucoffset_0based+2))
+                    outrow["Gap"] = (slice_aln.get_gap_count(pos_0based=nucoffset_0based) +
+                                     slice_aln.get_gap_count(pos_0based=nucoffset_0based+1) +
+                                     slice_aln.get_gap_count(pos_0based=nucoffset_0based+2))
                     outrow["Err"] = seq_err[codonoffset_0based]
                     outrow["Err_N"] = err_aa_change[codonoffset_0based]
                     outrow["Err_S"] = err_aa_nochange[codonoffset_0based]
@@ -224,6 +232,16 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
 
                     outrow["BreakRatio"] = break_ratio
                     outrow["Polytomy"] = total_polytomies
+
+                    #  log-likelihood ratio test that codon count distributions are similar between window and full population
+                    full_popn_codon_freq = full_popn_aln.get_codon_freq(codon_pos_0based=win_start_codon_1based_wrt_ref-1,
+                                                                        is_count_pad=False, is_count_gaps=False, is_count_ambig=False)
+                    slice_codon_freq = slice_aln.get_codon_freq(codon_pos_0based=codonoffset_0based,
+                                             is_count_pad=False, is_count_gaps=False, is_count_ambig=False)
+
+
+                    pval_same = cmp_freq_distro(full_popn_codon_freq, slice_codon_freq)
+                    outrow["P_SameCodonFreq"] = pval_same
 
 
                     if reader:
@@ -254,6 +272,30 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
             finally:
                 if fh_dnds_tsv and not fh_dnds_tsv.closed:
                     fh_dnds_tsv.close()
+
+def cmp_freq_distro(freq_distro1, freq_distro2):
+    """
+    Does a G-test to check if the frequency distributions are the same.
+    See http://docs.scipy.org/doc/scipy-0.16.0/reference/generated/scipy.stats.chi2_contingency.html
+
+    If one distribution is missing symbols form the other distribution, then sets the frequency for that symbol to zero.
+
+    If one of the distros contains all zero counts, then returns a pvalue of  None
+
+    :param dict freq_distro1:  {str symbol:  int count}
+    :param dict freq_distro2:   {str symbol:  int count}
+    :return float:  probability that the frequency distributions are the same
+    """
+    symbols = set(freq_distro1.keys() + freq_distro2.keys())
+    freq_distro_arr1 = [freq_distro1[symbol] if symbol in freq_distro1 else 0 for symbol in symbols]
+    freq_distro_arr2 = [freq_distro2[symbol] if symbol in freq_distro2 else 0 for symbol in symbols]
+
+    if freq_distro_arr1.count(0) == len(freq_distro_arr1) or freq_distro_arr2.count(0) == len (freq_distro_arr2):
+        pval = None
+    else:
+        _, pval, _, _ = scipy.stats.chi2_contingency(observed=[freq_distro_arr1, freq_distro_arr2], lambda_="log-likelihood")
+
+    return pval
 
 
 def error_by_codonpos(slice_msa_fasta, slice_start_wrt_ref_1based, full_popn_fasta):
@@ -405,6 +447,8 @@ def make1csv(output_csv_filename, sim_args_tsv):
                                                     "TreeLen.Act",  # length of window tree in nucleotide subs/site
                                                     "TreeDepth.Act",  # depth of longest branch in nucleotide subs/site
                                                     "Polytomy.Act",  # total polytomies in tree
+                                                    #log10 pvalue of log likelihood ratio test (aka Gtest) that codon count distros same as fullpopn
+                                                    "P_SameCodonFreq.Act",
                                                     # distance from actual to expected tree in Robinson Foulds-branch lengths /reads
                                                     "TreeDistPerRead.Act",
                                                     "ConserveCodon.Exp",
@@ -494,7 +538,7 @@ def make1csv(output_csv_filename, sim_args_tsv):
                         outrow["Is_Break"] = row["Is_Break"]
                         outrow["BreakRatio.Act"] = row["BreakRatio"]
                         outrow["Polytomy.Act"] = row["Polytomy"]
-
+                        outrow["P_SameCodonFreq.Act"] = row["P_SameCodonFreq"]
 
 
                         if not codonsite_2_full_cons.get(codonsite):

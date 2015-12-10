@@ -122,31 +122,81 @@ plot_resp_vs_var(data=dnds, resp_colname="SqDist_dn_minus_dS", var_colnames=WIND
 #' 
 
 window$TreeLenBin.Act <- cut(window$TreeLen.Act, breaks=5)
+window$PolytomyBin.Act <- cut(window$Polytomy.Act, breaks=5)
+window$PolytomyPerTreeLen.Act <- window$Polytomy.Act/window$TreeLen.Act
+window$PolytomyPerTreeLenBin.Act <- cut(window$PolytomyPerTreeLen.Act, breaks=5)
+window$PolytomyPerRead.Act <- window$Polytomy.Act/window$Reads.Act
+window$PolytomyPerReadBin.Act <- cut(window$PolytomyPerRead.Act, breaks=5)
+window$TreeLenPerRead.Act <- window$TreeLen.Act/window$Reads.Act
+window$TreeLenPerReadBin.Act <- cut(window$TreeLenPerRead.Act, breaks=5)
+
+window$WinP_SameCodonFreqBin.Act <- cut(window$WinP_SameCodonFreq.Act, breaks=5)
+
 
 #+ fig.height=12, fig.width=15
 fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) + 
   xlab(nice("TreeDist.Act")) + 
   ylab(nice("WinSqDist_dn_minus_dS")) +  
   theme_bw() + 
-  geom_point(aes(color=File), alpha=0.7, na.rm=TRUE) + 
-  geom_smooth(aes(color=File, group=File), method="lm", se=FALSE) + 
   geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
-  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Tree Length") + 
-  facet_wrap(~TreeLenBin.Act, scales="free")
-  #facet_wrap(~TreeLenBin.Act)
+  geom_point(aes(color=TreeLenBin.Act), na.rm=TRUE) + 
+  geom_smooth(aes(color=TreeLenBin.Act, group=TreeLenBin.Act), method="lm", se=FALSE, size=2) + 
+  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Tree Length")
 print(fig)
 
-window$PolytomyBin.Act <- cut(window$Polytomy.Act, breaks=5)
+
 fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) + 
   xlab(nice("TreeDist.Act")) + 
   ylab(nice("WinSqDist_dn_minus_dS")) +  
   theme_bw() + 
-  geom_point(aes(color=File), alpha=0.7, na.rm=TRUE) + 
-  geom_smooth(aes(color=File, group=File), method="lm", se=FALSE) + 
   geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
-  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Polytomies") +   
-  facet_wrap(~PolytomyBin.Act)
+  geom_point(aes(color=PolytomyBin.Act), na.rm=TRUE) + 
+  geom_smooth(aes(color=PolytomyBin.Act, group=PolytomyBin.Act), method="lm", se=FALSE, size=2) + 
+  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Polytomies")
 print(fig)
+
+fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) + 
+  xlab(nice("TreeDist.Act")) + 
+  ylab(nice("WinSqDist_dn_minus_dS")) +  
+  theme_bw() + 
+  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
+  geom_point(aes(color=PolytomyPerTreeLenBin.Act), na.rm=TRUE) + 
+  geom_smooth(aes(color=PolytomyPerTreeLenBin.Act, group=PolytomyPerTreeLenBin.Act), method="lm", se=FALSE, size=2) + 
+  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Polytomies Per TreeLen")
+print(fig)
+
+fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) + 
+  xlab(nice("TreeDist.Act")) + 
+  ylab(nice("WinSqDist_dn_minus_dS")) +  
+  theme_bw() + 
+  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
+  geom_point(aes(color=PolytomyPerReadBin.Act), na.rm=TRUE) + 
+  geom_smooth(aes(color=PolytomyPerReadBin.Act, group=PolytomyPerReadBin.Act), method="lm", se=FALSE, size=2) + 
+  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Polytomies Per Read")
+print(fig)
+
+
+fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) + 
+  xlab(nice("TreeDist.Act")) + 
+  ylab(nice("WinSqDist_dn_minus_dS")) +  
+  theme_bw() + 
+  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
+  geom_point(aes(color=TreeLenPerReadBin.Act), na.rm=TRUE) + 
+  geom_smooth(aes(color=TreeLenPerReadBin.Act, group=TreeLenPerReadBin.Act), method="lm", se=FALSE, size=2) + 
+  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Treelen Per Read")
+print(fig)
+
+fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) + 
+  xlab(nice("TreeDist.Act")) + 
+  ylab(nice("WinSqDist_dn_minus_dS")) +  
+  theme_bw() + 
+  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
+  geom_point(aes(color=WinP_SameCodonFreqBin.Act), na.rm=TRUE) + 
+  geom_smooth(aes(color=WinP_SameCodonFreqBin.Act, group=WinP_SameCodonFreqBin.Act), method="lm", se=FALSE, size=2) + 
+  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Codon Distro Similarity to Expected")
+print(fig)
+
+
 
 
 
