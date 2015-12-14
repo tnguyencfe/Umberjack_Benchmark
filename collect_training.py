@@ -27,10 +27,11 @@ LOGGER.propagate = 1
 
 PROCS = 6
 
-def get_tree_len_depth(treefilename, polytomy_brlen_thresh=0):
+def get_tree_len_depth(treefilename, polytomy_brlen_thresh=0.0):
     """
     Returns tuple of (sum of all branch lengths in tree (excluding root branch), deepest root to tip distance)
     :param treefilename:
+    :param float polytomy_brlen_thresh:  min branch length to be considered no polytomy
     :return: total branch length sum of tree (excluding root branch), deepest root to tip distance, total polytomies
     :rtype: (float, float, int)
     """
@@ -234,7 +235,7 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
                     outrow["Polytomy"] = total_polytomies
 
                     #  log-likelihood ratio test that codon count distributions are similar between window and full population
-                    full_popn_codon_freq = full_popn_aln.get_codon_freq(codon_pos_0based=win_start_codon_1based_wrt_ref-1,
+                    full_popn_codon_freq = full_popn_aln.get_codon_freq(codon_pos_0based=win_start_codon_1based_wrt_ref + codonoffset_0based -1,
                                                                         is_count_pad=False, is_count_gaps=False, is_count_ambig=False)
                     slice_codon_freq = slice_aln.get_codon_freq(codon_pos_0based=codonoffset_0based,
                                              is_count_pad=False, is_count_gaps=False, is_count_ambig=False)
@@ -273,7 +274,7 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
                 if fh_dnds_tsv and not fh_dnds_tsv.closed:
                     fh_dnds_tsv.close()
 
-def cmp_freq_distro(freq_distro1, freq_distro2):
+def cmp_freq_distro(obs_freq_distro, exp_freq_distro, is_scale=True):
     """
     Does a G-test to check if the frequency distributions are the same.
     See http://docs.scipy.org/doc/scipy-0.16.0/reference/generated/scipy.stats.chi2_contingency.html
@@ -282,18 +283,24 @@ def cmp_freq_distro(freq_distro1, freq_distro2):
 
     If one of the distros contains all zero counts, then returns a pvalue of  None
 
-    :param dict freq_distro1:  {str symbol:  int count}
-    :param dict freq_distro2:   {str symbol:  int count}
+    :param dict obs_freq_distro:  {str symbol:  int count}
+    :param dict exp_freq_distro:   {str symbol:  int count}
+    :param bool is_scale:  whether to scale the observed to the expected frequency counts
     :return float:  probability that the frequency distributions are the same
     """
-    symbols = set(freq_distro1.keys() + freq_distro2.keys())
-    freq_distro_arr1 = [freq_distro1[symbol] if symbol in freq_distro1 else 0 for symbol in symbols]
-    freq_distro_arr2 = [freq_distro2[symbol] if symbol in freq_distro2 else 0 for symbol in symbols]
+    symbols = set(obs_freq_distro.keys() + exp_freq_distro.keys())
+    obs_freq_distro_arr = [obs_freq_distro[symbol] if symbol in obs_freq_distro else 0 for symbol in symbols]
+    exp_freq_distro_arr = [exp_freq_distro[symbol] if symbol in exp_freq_distro else 0 for symbol in symbols]
 
-    if freq_distro_arr1.count(0) == len(freq_distro_arr1) or freq_distro_arr2.count(0) == len (freq_distro_arr2):
+    if is_scale:
+        scale = sum(exp_freq_distro_arr) / float(sum(obs_freq_distro_arr))
+        for i, obs_freq in enumerate(obs_freq_distro_arr):
+            obs_freq_distro_arr[i] = obs_freq * scale
+
+    if obs_freq_distro_arr.count(0) == len(obs_freq_distro_arr) or exp_freq_distro_arr.count(0) == len (exp_freq_distro_arr):
         pval = None
     else:
-        _, pval, _, _ = scipy.stats.chi2_contingency(observed=[freq_distro_arr1, freq_distro_arr2], lambda_="log-likelihood")
+        _, pval, _, _ = scipy.stats.chi2_contingency(observed=[obs_freq_distro_arr, exp_freq_distro_arr], lambda_="log-likelihood")
 
     return pval
 
@@ -633,7 +640,7 @@ def recollect_dnds(all_inferred_dnds_dir, sim_config_file):
     LOGGER.debug("Recollating Inferred collated dnds=" + inferred_collate_dnds_csv)
     LOGGER.debug("Recollating Sim Full Popn Fasta = " + full_popn_fasta)
 
-    collect_dnds(output_dir=all_inferred_dnds_dir, output_csv_filename=inferred_collate_dnds_csv, sim_config_file=sim_config_file)
+    collect_dnds(output_dir=all_inferred_dnds_dir, output_csv_filename=inferred_collate_dnds_csv, sim_data_config=sim_config_file)
 
     return inferred_collate_dnds_csv
 
@@ -649,7 +656,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    SIM_OUT_DIR = os.path.dirname(os.path.realpath(__file__)) + "/simulations/out"
+    SIM_OUT_DIR = os.path.dirname(os.path.realpath(__file__)) + "/simulations/out_fix"
     SIM_DATA_DIR = os.path.dirname(os.path.realpath(__file__)) + "/simulations/data"
     OUTPUT_INF_EXP_COLLATE_CSV = SIM_OUT_DIR + os.sep + "collate_all.treedist.csv"
 

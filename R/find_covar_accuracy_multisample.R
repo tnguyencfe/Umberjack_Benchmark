@@ -131,7 +131,8 @@ window$TreeLenPerRead.Act <- window$TreeLen.Act/window$Reads.Act
 window$TreeLenPerReadBin.Act <- cut(window$TreeLenPerRead.Act, breaks=5)
 
 window$WinP_SameCodonFreqBin.Act <- cut(window$WinP_SameCodonFreq.Act, breaks=5)
-
+window$ReadsBin.Act <- cut(window$Reads.Act, breaks=5)
+#window$ReadsBin.Act <- cut(window$Reads.Act, breaks=c(0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 10000))
 
 #+ fig.height=12, fig.width=15
 fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) + 
@@ -165,13 +166,27 @@ fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) +
   ggtitle("Inaccuracy Vs Tree Inaccuracy, By Polytomies Per TreeLen")
 print(fig)
 
-fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) + 
-  xlab(nice("TreeDist.Act")) + 
+fig <- ggplot(window, aes(x=TreeDistPerRead.Act, y=WinSqDist_dn_minus_dS)) + 
+  xlab(nice("TreeDistPerRead.Act")) + 
   ylab(nice("WinSqDist_dn_minus_dS")) +  
   theme_bw() + 
   geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
-  geom_point(aes(color=PolytomyPerReadBin.Act), na.rm=TRUE) + 
-  geom_smooth(aes(color=PolytomyPerReadBin.Act, group=PolytomyPerReadBin.Act), method="lm", se=FALSE, size=2) + 
+  geom_point(aes(color=PolytomyPerRead.Act), na.rm=TRUE, alpha=0.5) +   
+  scale_colour_gradient2(low="blue", mid="grey", high="red", midpoint=mean(window$PolytomyPerRead.Act, na.rm=TRUE)) +     
+  #scale_y_continuous(limits=c(max(resp_range["lower"], min(window$WinSqDist_dn_minus_dS, na.rm=TRUE)), 
+  #                            min(resp_range["upper"], max(window$WinSqDist_dn_minus_dS, na.rm=TRUE)))) + 
+  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Polytomies Per Read")
+print(fig)
+
+fig <- ggplot(window, aes(x=TreeDistPerRead.Act, y=WinSqDist_dn_minus_dS)) + 
+  xlab(nice("TreeDistPerRead.Act")) + 
+  ylab(nice("WinSqDist_dn_minus_dS")) +  
+  theme_bw() + 
+  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
+  geom_point(aes(color=PolytomyPerReadBin.Act), na.rm=TRUE, alpha=0.5) + 
+  geom_smooth(aes(color=PolytomyPerReadBin.Act, group=PolytomyPerReadBin.Act), method="lm", se=FALSE) + 
+  scale_y_continuous(limits=c(max(resp_range["lower"], min(window$WinSqDist_dn_minus_dS, na.rm=TRUE)), 
+                              min(resp_range["upper"], max(window$WinSqDist_dn_minus_dS, na.rm=TRUE)))) + 
   ggtitle("Inaccuracy Vs Tree Inaccuracy, By Polytomies Per Read")
 print(fig)
 
@@ -195,6 +210,78 @@ fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) +
   geom_smooth(aes(color=WinP_SameCodonFreqBin.Act, group=WinP_SameCodonFreqBin.Act), method="lm", se=FALSE, size=2) + 
   ggtitle("Inaccuracy Vs Tree Inaccuracy, By Codon Distro Similarity to Expected")
 print(fig)
+
+
+fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) + 
+  xlab(nice("TreeDist.Act")) + 
+  ylab(nice("WinSqDist_dn_minus_dS")) +  
+  theme_bw() + 
+  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
+  geom_point(aes(color=ReadsBin.Act), na.rm=TRUE) + 
+  geom_smooth(aes(color=ReadsBin.Act, group=ReadsBin.Act), method="lm", se=FALSE, size=2) + 
+  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Read Bin")
+print(fig)
+
+
+fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) + 
+  xlab(nice("TreeDist.Act")) + 
+  ylab(nice("WinSqDist_dn_minus_dS")) +  
+  theme_bw() + 
+  geom_smooth(method="lm", se=FALSE, color="red", size=2) +   
+  geom_point(aes(color=Reads.Act), na.rm=TRUE) + 
+  scale_colour_gradient2(low="blue", mid="grey", high="red", midpoint=log10(dnds$PopSize.Act[1])) +   
+  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Reads")
+print(fig)
+
+
+fig <- ggplot(window, aes(x=TreeDistPerRead.Act, y=WinSqDist_dn_minus_dS)) + 
+  xlab(nice("TreeDistPerRead.Act")) + 
+  ylab(nice("WinSqDist_dn_minus_dS")) +  
+  theme_bw() + 
+  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
+  geom_point(aes(color=log10(Reads.Act)), na.rm=TRUE) + 
+  scale_colour_gradient2(low="blue", mid="grey", high="red", midpoint=log10(dnds$PopSize.Act[1])) +   
+  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Reads")
+print(fig)
+
+resp_range <- outlier_range(window$WinSqDist_dn_minus_dS)
+fig <- ggplot(window, aes(x=TreeDistPerRead.Act, y=WinSqDist_dn_minus_dS)) + 
+  xlab(nice("TreeDistPerRead.Act")) + 
+  ylab(nice("WinSqDist_dn_minus_dS")) +  
+  theme_bw() + 
+  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
+  geom_point(aes(color=log10(Reads.Act)), alpha=0.5) + 
+  scale_colour_gradient2(low="blue", mid="grey", high="red", midpoint=mean(log10(window$Reads.Act), na.rm=TRUE)) +   
+  scale_y_continuous(limits=c(max(resp_range["lower"], min(window$WinSqDist_dn_minus_dS, na.rm=TRUE)), 
+                              min(resp_range["upper"], max(window$WinSqDist_dn_minus_dS, na.rm=TRUE)))) + 
+  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Reads, blown up")
+print(fig)
+
+fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) + 
+  xlab(nice("TreeDist.Act")) + 
+  ylab(nice("WinSqDist_dn_minus_dS")) +  
+  theme_bw() + 
+  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
+  geom_point(aes(color=TreeLen.Act), na.rm=TRUE) + 
+  scale_colour_gradient2(low="blue", mid="grey", high="red", midpoint=mean(window$TreeLen.Act, na.rm=TRUE)) + 
+  #geom_smooth(aes(color=Reads.Act, group=Reads.Act), method="lm", se=FALSE, size=2) + 
+  ggtitle("Inaccuracy Vs Tree Inaccuracy, By TreeLen")
+print(fig)
+
+resp_range <- outlier_range(window$WinSqDist_dn_minus_dS)
+fig <- ggplot(window, aes(x=TreeDistPerRead.Act, y=WinSqDist_dn_minus_dS)) + 
+  xlab(nice("TreeDistPerRead.Act")) + 
+  ylab(nice("WinSqDist_dn_minus_dS")) +  
+  theme_bw() + 
+  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
+  geom_point(aes(color=log10(Window_Subst.Act)), alpha=0.5) + 
+  scale_colour_gradient2(low="blue", mid="grey", high="red", midpoint=mean(log10(window$Window_Subst.Act), na.rm=TRUE)) +   
+  scale_y_continuous(limits=c(max(resp_range["lower"], min(window$WinSqDist_dn_minus_dS, na.rm=TRUE)), 
+                              min(resp_range["upper"], max(window$WinSqDist_dn_minus_dS, na.rm=TRUE)))) + 
+  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Window Subs")
+print(fig)
+
+
 
 
 

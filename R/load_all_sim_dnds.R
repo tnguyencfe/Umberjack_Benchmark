@@ -108,6 +108,10 @@ nice <- function(name) {
     return ("Ave Robinson Foulds (Window Tree, Expected Tree) \n Weighted By Genome Width Covered By Expected Tree")
   } else if (name == "EntropyCodon.Exp") {
     return ("True Population Site Codon Entropy")
+  } else if (name == "WinP_SameCodonFreq.Act") {
+    return ("Window Ave log10 P(window codon distro matches full popn)")
+  } else if (name == "P_SameCodonFreq.Act") {
+    return ("log10 P(window codon distro matches full popn)")
   } else if (name == "N.Exp") {
     return ("True Population Site Nonsyn Subs")
   } else if (name == "S.Exp") {
@@ -165,9 +169,10 @@ get_all_sim_dnds <- function(dnds_filename=NULL) {
   dnds$Cov.Act <- dnds$Reads.Act/dnds$PopSize.Act  
   dnds$IsLowSubst.Act <- as.factor((dnds$N.Act > 0 & dnds$N.Act < 1) | (dnds$S.Act > 0 & dnds$S.Act < 1))
   
-  if (all(0 <= dnds$P_SameCodonFreq) & all(dnds$P_SameCodonFreq <= 1))  # we want log10 probabilities
+  if (all(0 <= dnds$P_SameCodonFreq.Act, na.rm=TRUE) & all(dnds$P_SameCodonFreq.Act <= 1, na.rm=TRUE))  # we want log10 probabilities
   {
-    dnds$P_SameCodonFreq <- log10(dnds$P_SameCodonFreq + PSEUDOCOUNT)
+    dnds$P_SameCodonFreq.Act <- log10(dnds$P_SameCodonFreq.Act)
+    dnds$P_SameCodonFreq.Act[is.infinite(dnds$P_SameCodonFreq.Act)] <- NA
   }
   
   if (!"TreeDist.Act"  %in% colnames(dnds)) {
