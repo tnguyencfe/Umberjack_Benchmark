@@ -76,6 +76,40 @@ def get_break_ratio(sim_data, win_start, win_end):
 
 
 
+def count_resolved(subs_tsv):
+    """
+    Counts the substitutions that were resolved vs observed
+    :return dict:
+    {int 0based site:  (float total resolved Nonsyn subs, float total resolved syn subs,
+                float total observed nonsyn subs, float total observed syn subs)}
+    """
+    site_to_counts = dict()
+    with open(subs_tsv, 'rU') as fh:
+        reader = csv.DictReader(fh, delimiter="\t")
+
+        IDX_TOTAL_RES_NS = 0
+        IDX_TOTAL_RES_S = 1
+        IDX_TOTAL_OBS_NS = 2
+        IDX_TOTAL_OBS_S = 3
+        for row in reader:
+            site = int(row["Site"])
+            nonsyn = float(row["ObservedNonsynSubst"])
+            syn = float(row["ObservedSynSubst"])
+            if site not in site_to_counts:
+                site_to_counts[site] = [0.0, 0.0, 0.0, 0.0]
+
+            if nonsyn < 1.0:
+                site_to_counts[site][IDX_TOTAL_RES_NS] += nonsyn
+            else:
+                site_to_counts[site][IDX_TOTAL_OBS_NS] += nonsyn
+            if syn < 1.0:
+                site_to_counts[site][IDX_TOTAL_RES_S] += syn
+            else:
+                site_to_counts[site][IDX_TOTAL_OBS_S] += syn
+
+    return site_to_counts
+
+
 
 def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None):
     """
@@ -124,7 +158,9 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
                                             "Is_Break",  # Whether a strand switch starts on this codon site
                                             "BreakRatio",  # sum across window breakpoints (ratio of bases on either side of breakpoint)
                                             "Polytomy",  # total polytomies in tree
-                                            "P_SameCodonFreq"  # log10 probability that sliced codon frequency distro is same as full population distro
+                                            "P_SameCodonFreq",  # log10 probability that sliced codon frequency distro is same as full population distro
+                                            # Total substitutions that were resolved vs observed
+                                            "ResolvedPerSub"
                                 ]
         )
         writer.writeheader()
@@ -183,6 +219,10 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
             full_popn_aln.parse(full_popn_fasta)
 
             dnds_tsv_filename = slice_fasta_fileprefix + ".dnds.tsv"
+            subs_tsv_filename = slice_fasta_fileprefix + ".subst.tsv"
+
+            site_to_subcounts = count_resolved(subs_tsv_filename)
+
             fh_dnds_tsv = None
             reader = None
             try:
@@ -244,6 +284,10 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
                     pval_same = cmp_freq_distro(full_popn_codon_freq, slice_codon_freq)
                     outrow["P_SameCodonFreq"] = pval_same
 
+                    resolved_ns, resolved_s, obs_ns, obs_s = site_to_subcounts[codonoffset_0based]
+                    total_subs = resolved_ns +  resolved_s +  obs_ns +  obs_s
+                    if total_subs:
+                        outrow["ResolvedPerSub"] = (resolved_ns + resolved_s) / total_subs
 
                     if reader:
                         dnds_info = reader.next()  # Every codon site is a row in the *.dnds.tsv file
@@ -259,6 +303,12 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
                         outrow["dS"] = dnds_info[hyphy_handler.HYPHY_TSV_DS_COL]
                         outrow["dN_minus_dS"] = dnds_info[hyphy_handler.HYPHY_TSV_SCALED_DN_MINUS_DS_COL]
                         outrow["unscaled_dN_minus_dS"] = dnds_info[hyphy_handler.HYPHY_TSV_DN_MINUS_DS_COL]
+
+                        if  abs(total_subs -
+                                (float(dnds_info[hyphy_handler.HYPHY_TSV_N_COL]) + float(dnds_info[hyphy_handler.HYPHY_TSV_S_COL]))) > 1e-2:
+                            raise ValueError("Inconsitent total subs at 0-based site " +
+                                             str(codonoffset_0based) + " wrt  " + subs_tsv_filename + " and " + dnds_tsv_filename +
+                                             " " + str(total_subs) + " " + str(float(dnds_info[hyphy_handler.HYPHY_TSV_N_COL]) + float(dnds_info[hyphy_handler.HYPHY_TSV_S_COL])))
 
                     writer.writerow(outrow)
 
@@ -456,6 +506,8 @@ def make1csv(output_csv_filename, sim_args_tsv):
                                                     "Polytomy.Act",  # total polytomies in tree
                                                     #log10 pvalue of log likelihood ratio test (aka Gtest) that codon count distros same as fullpopn
                                                     "P_SameCodonFreq.Act",
+                                                    # Fraction of substitutions that were resolved as opposed to observed
+                                                    "ResolvedPerSub.Act",
                                                     # distance from actual to expected tree in Robinson Foulds-branch lengths /reads
                                                     "TreeDistPerRead.Act",
                                                     "ConserveCodon.Exp",
@@ -546,6 +598,7 @@ def make1csv(output_csv_filename, sim_args_tsv):
                         outrow["BreakRatio.Act"] = row["BreakRatio"]
                         outrow["Polytomy.Act"] = row["Polytomy"]
                         outrow["P_SameCodonFreq.Act"] = row["P_SameCodonFreq"]
+                        outrow["ResolvedPerSub.Act"] = row["ResolvedPerSub"]
 
 
                         if not codonsite_2_full_cons.get(codonsite):
