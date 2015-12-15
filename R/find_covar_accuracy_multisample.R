@@ -75,7 +75,6 @@ plot_resp_vs_var <- function(data, resp_colname, var_colnames, color_colname=NUL
                      getPalette <- colorRampPalette(brewer.pal(9, "Set1"))
                      
                      fig <- ggplot(data, aes_string(x=var_colname, y=resp_colname)) + 
-#                        guides(color=FALSE) + 
                        xlab(nice(var_colname)) + 
                        ylab(nice(resp_colname)) +
                        scale_colour_manual(values = getPalette(colourCount)) +
@@ -86,10 +85,13 @@ plot_resp_vs_var <- function(data, resp_colname, var_colnames, color_colname=NUL
                        scale_y_continuous(limits=c(max(resp_range["lower"], min(data[, resp_colname], na.rm=TRUE)), 
                                                    min(resp_range["upper"], max(data[, resp_colname], na.rm=TRUE)))) + 
                        ggtitle("Inaccuracy Vs Covariate")
+                     
+                     if (colourCount > 12) {  # If there are way too many factors, there's no point in coloring them.
+                       fig <- fig + guides(color=FALSE)
+                     }
                      print(fig)
                    } else {                          
                      fig <- ggplot(filter_data, aes_string(x=var_colname, y=resp_colname)) + 
-                       #guides(color=FALSE) + 
                        theme_bw() + 
                        xlab(nice(var_colname)) + 
                        ylab(nice(resp_colname)) + 
@@ -103,12 +105,6 @@ plot_resp_vs_var <- function(data, resp_colname, var_colnames, color_colname=NUL
 }
 #+ fig.width=10
 plot_resp_vs_var(data=window, resp_colname="WinSqDist_dn_minus_dS", var_colnames=WINDOW_COVAR_NAMES, color_colname="File")
-#plot_resp_vs_var(data=window, resp_colname="WinAbsLOD_dNdS", var_colnames=WINDOW_COVAR_NAMES)
-
-#' Plot robinson foulds with other confounding variables
-#' 
-#+ fig.width=10
-plot_resp_vs_var(data=window, resp_colname="TreeDistPerRead.Act", var_colnames=WINDOW_COVAR_NAMES, color_colname="File")
 
 
 #' Plot Inaccuracy Vs Numerical Variables That Apply at Window-Site Level
@@ -116,173 +112,6 @@ plot_resp_vs_var(data=window, resp_colname="TreeDistPerRead.Act", var_colnames=W
 #+ fig.width=10
 plot_resp_vs_var(data=dnds, resp_colname="SqDist_dn_minus_dS", var_colnames=WINDOW_SITE_COVAR_NAMES, color_colname="File")
 #plot_resp_vs_var(data=dnds, resp_colname="AbsLOD_dNdS", var_colnames=WINDOW_SITE_COVAR_NAMES)
-
-#' Investigate Tree Accuracy vs Umberjack dnds Accuracy
-#' ==============
-#' 
-
-window$TreeLenBin.Act <- cut(window$TreeLen.Act, breaks=5)
-window$PolytomyBin.Act <- cut(window$Polytomy.Act, breaks=5)
-window$PolytomyPerTreeLen.Act <- window$Polytomy.Act/window$TreeLen.Act
-window$PolytomyPerTreeLenBin.Act <- cut(window$PolytomyPerTreeLen.Act, breaks=5)
-window$PolytomyPerRead.Act <- window$Polytomy.Act/window$Reads.Act
-window$PolytomyPerReadBin.Act <- cut(window$PolytomyPerRead.Act, breaks=5)
-window$TreeLenPerRead.Act <- window$TreeLen.Act/window$Reads.Act
-window$TreeLenPerReadBin.Act <- cut(window$TreeLenPerRead.Act, breaks=5)
-
-window$WinP_SameCodonFreqBin.Act <- cut(window$WinP_SameCodonFreq.Act, breaks=5)
-window$ReadsBin.Act <- cut(window$Reads.Act, breaks=5)
-#window$ReadsBin.Act <- cut(window$Reads.Act, breaks=c(0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 10000))
-
-#+ fig.height=12, fig.width=15
-fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) + 
-  xlab(nice("TreeDist.Act")) + 
-  ylab(nice("WinSqDist_dn_minus_dS")) +  
-  theme_bw() + 
-  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
-  geom_point(aes(color=TreeLenBin.Act), na.rm=TRUE) + 
-  geom_smooth(aes(color=TreeLenBin.Act, group=TreeLenBin.Act), method="lm", se=FALSE, size=2) + 
-  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Tree Length")
-print(fig)
-
-
-fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) + 
-  xlab(nice("TreeDist.Act")) + 
-  ylab(nice("WinSqDist_dn_minus_dS")) +  
-  theme_bw() + 
-  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
-  geom_point(aes(color=PolytomyBin.Act), na.rm=TRUE) + 
-  geom_smooth(aes(color=PolytomyBin.Act, group=PolytomyBin.Act), method="lm", se=FALSE, size=2) + 
-  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Polytomies")
-print(fig)
-
-fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) + 
-  xlab(nice("TreeDist.Act")) + 
-  ylab(nice("WinSqDist_dn_minus_dS")) +  
-  theme_bw() + 
-  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
-  geom_point(aes(color=PolytomyPerTreeLenBin.Act), na.rm=TRUE) + 
-  geom_smooth(aes(color=PolytomyPerTreeLenBin.Act, group=PolytomyPerTreeLenBin.Act), method="lm", se=FALSE, size=2) + 
-  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Polytomies Per TreeLen")
-print(fig)
-
-fig <- ggplot(window, aes(x=TreeDistPerRead.Act, y=WinSqDist_dn_minus_dS)) + 
-  xlab(nice("TreeDistPerRead.Act")) + 
-  ylab(nice("WinSqDist_dn_minus_dS")) +  
-  theme_bw() + 
-  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
-  geom_point(aes(color=PolytomyPerRead.Act), na.rm=TRUE, alpha=0.5) +   
-  scale_colour_gradient2(low="blue", mid="grey", high="red", midpoint=mean(window$PolytomyPerRead.Act, na.rm=TRUE)) +     
-  #scale_y_continuous(limits=c(max(resp_range["lower"], min(window$WinSqDist_dn_minus_dS, na.rm=TRUE)), 
-  #                            min(resp_range["upper"], max(window$WinSqDist_dn_minus_dS, na.rm=TRUE)))) + 
-  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Polytomies Per Read")
-print(fig)
-
-fig <- ggplot(window, aes(x=TreeDistPerRead.Act, y=WinSqDist_dn_minus_dS)) + 
-  xlab(nice("TreeDistPerRead.Act")) + 
-  ylab(nice("WinSqDist_dn_minus_dS")) +  
-  theme_bw() + 
-  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
-  geom_point(aes(color=PolytomyPerReadBin.Act), na.rm=TRUE, alpha=0.5) + 
-  geom_smooth(aes(color=PolytomyPerReadBin.Act, group=PolytomyPerReadBin.Act), method="lm", se=FALSE) + 
-  scale_y_continuous(limits=c(max(resp_range["lower"], min(window$WinSqDist_dn_minus_dS, na.rm=TRUE)), 
-                              min(resp_range["upper"], max(window$WinSqDist_dn_minus_dS, na.rm=TRUE)))) + 
-  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Polytomies Per Read")
-print(fig)
-
-
-fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) + 
-  xlab(nice("TreeDist.Act")) + 
-  ylab(nice("WinSqDist_dn_minus_dS")) +  
-  theme_bw() + 
-  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
-  geom_point(aes(color=TreeLenPerReadBin.Act), na.rm=TRUE) + 
-  geom_smooth(aes(color=TreeLenPerReadBin.Act, group=TreeLenPerReadBin.Act), method="lm", se=FALSE, size=2) + 
-  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Treelen Per Read")
-print(fig)
-
-fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) + 
-  xlab(nice("TreeDist.Act")) + 
-  ylab(nice("WinSqDist_dn_minus_dS")) +  
-  theme_bw() + 
-  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
-  geom_point(aes(color=WinP_SameCodonFreqBin.Act), na.rm=TRUE) + 
-  geom_smooth(aes(color=WinP_SameCodonFreqBin.Act, group=WinP_SameCodonFreqBin.Act), method="lm", se=FALSE, size=2) + 
-  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Codon Distro Similarity to Expected")
-print(fig)
-
-
-fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) + 
-  xlab(nice("TreeDist.Act")) + 
-  ylab(nice("WinSqDist_dn_minus_dS")) +  
-  theme_bw() + 
-  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
-  geom_point(aes(color=ReadsBin.Act), na.rm=TRUE) + 
-  geom_smooth(aes(color=ReadsBin.Act, group=ReadsBin.Act), method="lm", se=FALSE, size=2) + 
-  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Read Bin")
-print(fig)
-
-
-fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) + 
-  xlab(nice("TreeDist.Act")) + 
-  ylab(nice("WinSqDist_dn_minus_dS")) +  
-  theme_bw() + 
-  geom_smooth(method="lm", se=FALSE, color="red", size=2) +   
-  geom_point(aes(color=Reads.Act), na.rm=TRUE) + 
-  scale_colour_gradient2(low="blue", mid="grey", high="red", midpoint=log10(dnds$PopSize.Act[1])) +   
-  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Reads")
-print(fig)
-
-
-fig <- ggplot(window, aes(x=TreeDistPerRead.Act, y=WinSqDist_dn_minus_dS)) + 
-  xlab(nice("TreeDistPerRead.Act")) + 
-  ylab(nice("WinSqDist_dn_minus_dS")) +  
-  theme_bw() + 
-  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
-  geom_point(aes(color=log10(Reads.Act)), na.rm=TRUE) + 
-  scale_colour_gradient2(low="blue", mid="grey", high="red", midpoint=log10(dnds$PopSize.Act[1])) +   
-  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Reads")
-print(fig)
-
-resp_range <- outlier_range(window$WinSqDist_dn_minus_dS)
-fig <- ggplot(window, aes(x=TreeDistPerRead.Act, y=WinSqDist_dn_minus_dS)) + 
-  xlab(nice("TreeDistPerRead.Act")) + 
-  ylab(nice("WinSqDist_dn_minus_dS")) +  
-  theme_bw() + 
-  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
-  geom_point(aes(color=log10(Reads.Act)), alpha=0.5) + 
-  scale_colour_gradient2(low="blue", mid="grey", high="red", midpoint=mean(log10(window$Reads.Act), na.rm=TRUE)) +   
-  scale_y_continuous(limits=c(max(resp_range["lower"], min(window$WinSqDist_dn_minus_dS, na.rm=TRUE)), 
-                              min(resp_range["upper"], max(window$WinSqDist_dn_minus_dS, na.rm=TRUE)))) + 
-  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Reads, blown up")
-print(fig)
-
-fig <- ggplot(window, aes(x=TreeDist.Act, y=WinSqDist_dn_minus_dS)) + 
-  xlab(nice("TreeDist.Act")) + 
-  ylab(nice("WinSqDist_dn_minus_dS")) +  
-  theme_bw() + 
-  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
-  geom_point(aes(color=TreeLen.Act), na.rm=TRUE) + 
-  scale_colour_gradient2(low="blue", mid="grey", high="red", midpoint=mean(window$TreeLen.Act, na.rm=TRUE)) + 
-  #geom_smooth(aes(color=Reads.Act, group=Reads.Act), method="lm", se=FALSE, size=2) + 
-  ggtitle("Inaccuracy Vs Tree Inaccuracy, By TreeLen")
-print(fig)
-
-resp_range <- outlier_range(window$WinSqDist_dn_minus_dS)
-fig <- ggplot(window, aes(x=TreeDistPerRead.Act, y=WinSqDist_dn_minus_dS)) + 
-  xlab(nice("TreeDistPerRead.Act")) + 
-  ylab(nice("WinSqDist_dn_minus_dS")) +  
-  theme_bw() + 
-  geom_smooth(method="lm", se=FALSE, color="black", size=2) +   
-  geom_point(aes(color=log10(Window_Subst.Act)), alpha=0.5) + 
-  scale_colour_gradient2(low="blue", mid="grey", high="red", midpoint=mean(log10(window$Window_Subst.Act), na.rm=TRUE)) +   
-  scale_y_continuous(limits=c(max(resp_range["lower"], min(window$WinSqDist_dn_minus_dS, na.rm=TRUE)), 
-                              min(resp_range["upper"], max(window$WinSqDist_dn_minus_dS, na.rm=TRUE)))) + 
-  ggtitle("Inaccuracy Vs Tree Inaccuracy, By Window Subs")
-print(fig)
-
-
-
 
 
 
@@ -356,15 +185,18 @@ print (fig)
 
 #' Plot diff from expected values from each file
 #+ fig.width=12
-fig <- ggplot(dnds, aes(x=SqDist_dn_minus_dS, color=File)) + 
+fig <- ggplot(dnds, aes(x=(1+SqDist_dn_minus_dS), color=File)) + 
   geom_density() + 
+  scale_x_log10() + 
   xlab("Sq diff from expected dn-ds") + 
   ggtitle("Sq diff from Expected dnds from each dataset")
 print (fig)
 
-fig <- ggplot(dnds, aes(y=SqDist_dn_minus_dS, color=File, x=File)) + 
+fig <- ggplot(dnds, aes(y=(1+SqDist_dn_minus_dS), color=File, x=File)) + 
   geom_boxplot()  + 
   guides(color=FALSE) + 
+  scale_y_log10() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
   ylab("Sq diff from expected dn-ds") + 
   xlab("Dataset") + 
   ggtitle("sq diff from Expected dnds from each dataset")
@@ -372,16 +204,18 @@ print (fig)
 
 #' Plot diff from expected values from each file
 #+ fig.width=15, fig.height=12
-fig <- ggplot(dnds, aes(x=CodonSite, y=SqDist_dn_minus_dS, color=File)) +   
+fig <- ggplot(dnds, aes(x=CodonSite, y=(1+SqDist_dn_minus_dS), color=File)) +   
   geom_line() + 
   xlab("CodonSite") + 
   ylab("Sq Diff from Expected dn-ds")+ 
+  scale_y_log10() + 
   ggtitle("Sq diff from Expected dnds from each dataset")
 
-sm_fig <- ggplot(dnds, aes(x=CodonSite, y=SqDist_dn_minus_dS, color=File)) +   
+sm_fig <- ggplot(dnds, aes(x=CodonSite, y=(1+SqDist_dn_minus_dS), color=File)) +   
   geom_smooth(se=FALSE) + 
   xlab("CodonSite") + 
   ylab("Sq Diff from Expected dn-ds")+ 
+  scale_y_log10() + 
   ggtitle("Sq diff from Expected dnds from each dataset, smoothed")
 
 exp_fig <- ggplot(dnds, aes(x=CodonSite, y=dN_minus_dS.Exp, color=File)) +   
@@ -497,10 +331,10 @@ dim(cleandnds)
 
 
 
-DistFormula <- as.formula(paste0("AbsDist_dn_minus_dS~", paste0(LM_COVAR_NAMES, collapse=" + ")))
+DistFormula <- as.formula(paste0("SqDist_dn_minus_dS~", paste0(LM_COVAR_NAMES, collapse=" + ")))
 print(DistFormula)
 allfitDist <- speedglm(DistFormula, data=cleandnds)
 print(summary(allfitDist))
-bestfit <- fit_and_plot_glm_fast("AbsDist_dn_minus_dS", allfitDist, df=cleandnds)
+bestfit <- fit_and_plot_glm_fast("SqDist_dn_minus_dS", allfitDist, df=cleandnds)
 
 
