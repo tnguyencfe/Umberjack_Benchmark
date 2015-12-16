@@ -221,13 +221,15 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
             dnds_tsv_filename = slice_fasta_fileprefix + ".dnds.tsv"
             subs_tsv_filename = slice_fasta_fileprefix + ".subst.tsv"
 
-            site_to_subcounts = count_resolved(subs_tsv_filename)
+
 
             fh_dnds_tsv = None
             reader = None
+            site_to_subcounts = dict()
             try:
-                if os.path.exists(dnds_tsv_filename):
+                if os.path.exists(dnds_tsv_filename) and os.path.getsize(dnds_tsv_filename):
                     fh_dnds_tsv = open(dnds_tsv_filename, 'rU')
+                    site_to_subcounts = count_resolved(subs_tsv_filename)
                     reader = csv.DictReader(fh_dnds_tsv, delimiter='\t')
 
                 for codonoffset_0based in xrange(codon_width):
@@ -284,12 +286,12 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
                     pval_same = cmp_freq_distro(full_popn_codon_freq, slice_codon_freq)
                     outrow["P_SameCodonFreq"] = pval_same
 
-                    resolved_ns, resolved_s, obs_ns, obs_s = site_to_subcounts[codonoffset_0based]
-                    total_subs = resolved_ns +  resolved_s +  obs_ns +  obs_s
-                    if total_subs:
-                        outrow["ResolvedPerSub"] = (resolved_ns + resolved_s) / total_subs
-
                     if reader:
+                        resolved_ns, resolved_s, obs_ns, obs_s = site_to_subcounts[codonoffset_0based]
+                        total_subs = resolved_ns +  resolved_s +  obs_ns +  obs_s
+                        if total_subs:
+                            outrow["ResolvedPerSub"] = (resolved_ns + resolved_s) / total_subs
+
                         dnds_info = reader.next()  # Every codon site is a row in the *.dnds.tsv file
                         if codonoffset_0based != int(dnds_info["Site"]):
                             # dnds tsv specified the codon site in 0-based coordinates in Site field wrt Slice
