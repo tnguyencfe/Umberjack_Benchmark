@@ -36,6 +36,7 @@ NUM_NAMES <- c("Window_Start",
                "Polytomy.Act",
                "PolytomyPerRead.Act",
                "P_SameCodonFreq.Act",
+               "ResolvedPerSub.Act",
                "ConserveCodon.Exp",
                "EntropyCodon.Exp",
                "N.Exp",
@@ -114,7 +115,10 @@ nice <- function(name) {
     return ("Window Ave log10 P(window codon distro matches full popn)")
   } else if (name == "P_SameCodonFreq.Act") {
     return ("log10 P(window codon distro matches full popn)")
-  } else if (name == "N.Exp") {
+  } else if (name == "ResolvedPerSub.Act ") {
+    return ("Fraction of Substitutions from Ambiguous Codons")
+  }
+  else if (name == "N.Exp") {
     return ("True Population Site Nonsyn Subs")
   } else if (name == "S.Exp") {
     return ("True Population Site Syn Subs")

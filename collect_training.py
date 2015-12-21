@@ -95,14 +95,17 @@ def count_resolved(subs_tsv):
             site = int(row["Site"])
             nonsyn = float(row["ObservedNonsynSubst"])
             syn = float(row["ObservedSynSubst"])
+            child_codon = row["ChildCodon"]
+            is_ambig = child_codon.find(",") >= 0
+
             if site not in site_to_counts:
                 site_to_counts[site] = [0.0, 0.0, 0.0, 0.0]
 
-            if nonsyn < 1.0:
+            if is_ambig:
                 site_to_counts[site][IDX_TOTAL_RES_NS] += nonsyn
             else:
                 site_to_counts[site][IDX_TOTAL_OBS_NS] += nonsyn
-            if syn < 1.0:
+            if is_ambig:
                 site_to_counts[site][IDX_TOTAL_RES_S] += syn
             else:
                 site_to_counts[site][IDX_TOTAL_OBS_S] += syn
@@ -203,6 +206,7 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
 
                 # If there is recombination, there may be multiple trees.
                 # Use the full population tree corresponding to slice portion of the genome.
+
                 tree_dist = TestTopology.calc_window_tree_dist(sim_data=sim_data,
                                                                window_fasta=slice_fasta_filename,
                                                                window_treefile=slice_tree_filename,
@@ -290,7 +294,7 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
                         resolved_ns, resolved_s, obs_ns, obs_s = site_to_subcounts[codonoffset_0based]
                         total_subs = resolved_ns +  resolved_s +  obs_ns +  obs_s
                         if total_subs:
-                            outrow["ResolvedPerSub"] = (resolved_ns + resolved_s) / total_subs
+                            outrow["ResolvedPerSub"] = (resolved_ns + resolved_s) / float(total_subs)
 
                         dnds_info = reader.next()  # Every codon site is a row in the *.dnds.tsv file
                         if codonoffset_0based != int(dnds_info["Site"]):
@@ -711,7 +715,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    SIM_OUT_DIR = os.path.dirname(os.path.realpath(__file__)) + "/simulations/out_fix"
+    SIM_OUT_DIR = os.path.dirname(os.path.realpath(__file__)) + "/simulations/out"
     SIM_DATA_DIR = os.path.dirname(os.path.realpath(__file__)) + "/simulations/data"
     OUTPUT_INF_EXP_COLLATE_CSV = SIM_OUT_DIR + os.sep + "collate_all.treedist.csv"
 

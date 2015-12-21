@@ -37,7 +37,7 @@ if (exists("dnds_filename")) {
 } else {
   dnds <- get_all_sim_dnds()
 }
-dim(dnds)
+# dim(dnds)
 summary(dnds)
 
 # Per Window data
