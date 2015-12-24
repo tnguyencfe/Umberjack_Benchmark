@@ -17,10 +17,14 @@ PROCS <- 5
 
 source("./load_all_sim_dnds.R")
 
+args <- commandArgs(TRUE)
+if (length(args) >= 1) {
+  dnds_filename <- args[1]
+}
 slaves <- startMPIcluster(count=PROCS)
 registerDoMPI(slaves)
 
-do_predict_cont()
+do_predict_cont(dnds_filename)
 
 closeCluster(slaves)
 mpi.quit()

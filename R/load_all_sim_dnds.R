@@ -487,9 +487,9 @@ rf_train <- function(dnds, respname, feats) {
 
 
 # Does all the work for regression
-do_predict_cont <- function() {
+do_predict_cont <- function(dnds_filename=NULL) {
   
-  dnds <- get_all_sim_dnds()
+  dnds <- get_all_sim_dnds(dnds_filename)
   dim(dnds)
   summary(dnds)
   head(dnds)
