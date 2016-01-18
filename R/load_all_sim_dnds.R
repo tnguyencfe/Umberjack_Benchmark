@@ -77,6 +77,24 @@ CAT_COVAR_NAMES <- c("IsLowSubst.Act")
 # variables used in linear regression
 LM_COVAR_NAMES <- c(CAT_COVAR_NAMES, COVAR_NAMES)
 
+REAL_LM_COVAR_NAMES <- c("Reads.Act",
+                         "UnambigCodonRate.Act",
+                         "AADepth.Act",
+                         "ConserveCodon.Act",
+                         "EntropyCodon.Act",
+                         "UnknownPerCodon.Act",
+                         "N.Act",
+                         "S.Act",
+                         "TreeLen.Act",
+                         "TreeLenPerRead.Act",
+                         "TreeDepth.Act",
+                         "Polytomy.Act",
+                         "PolytomyPerRead.Act",
+                         "ResolvedPerSub.Act",                                                  
+                         "Window_Entropy.Act", "Window_UnambigCodonRate.Act", "Window_Subst.Act"
+                         )
+
+
 
 nice <- function(name) {
   if (name == "IsLowSubst.Act") {
@@ -252,6 +270,7 @@ get_all_sim_dnds <- function(dnds_filename=NULL) {
   
   return (dnds)
 }
+
 
 get_window_sim_dnds <- function(dnds) {
   # When we compare umberjack dnds against variables that affect entire windows (as opposed to window-codon sites),
@@ -644,42 +663,21 @@ do_predict_class_diversify_real <- function() {
 }
 
 
-# Does all the work for finding Umberjack accuracy for classifying real sites 
-do_predict_cont_real <- function() {
+# Does all the work for finding Umberjack accuracy for regression on real sites 
+do_predict_cont_real <- function(dnds_filename=NULL) {
   
-  dnds <- get_all_sim_dnds()
+  dnds <- get_all_sim_dnds(dnds_filename)
   dim(dnds)
   summary(dnds)
   head(dnds)
   object_size(dnds)
   print(paste0("mem used from dnds=", mem_used()))
   
-  NUM_RESP_NAMES <- c("LOD_dNdS", "Dist_dn_minus_dS", "AbsLOD_dNdS", "AbsDist_dn_minus_dS")
-  CAT_RESP_NAMES <- c("CrapLOD", "CrapDist", "wrongSelect")
-  COVAR_NAMES <- colnames(dnds[sapply(dnds,is.numeric)])[!colnames(dnds[sapply(dnds,is.numeric)]) %in% NUM_RESP_NAMES]
-  CAT_COVAR_NAMES <-  c() #c("IsLowSubst.Act")
-  LM_COVAR_NAMES <- c(CAT_COVAR_NAMES, 
-                      COVAR_NAMES[!(COVAR_NAMES %in% c("dNdS.Act", "dNdS.Exp",
-                                                       "dN_minus_dS.Act", "dN_minus_dS.Exp",                                                        
-                                                       "ConserveTrueBase.Act", "ConserveTrueBase.Exp", 
-                                                       "Window_Conserve.Act",
-                                                       "Window_ErrPerCodon.Act",
-                                                       "EN.Exp", "ES.Exp", "EN.Act", "ES.Act",
-                                                       "Window_Start", "Window_End", "CodonSite",
-                                                       "PopSize.Act",
-                                                       "Cov.Act",
-                                                       "ErrPerCodon.Act",
-                                                       "N.Exp", "S.Exp", 
-                                                       "EntropyTrueBase.Exp",
-                                                       "Subst.Act", "Subst.Exp"
-                      )
-                      )])
-  
-  feats <- c(LM_COVAR_NAMES)
+  feats <- c(REAL_LM_COVAR_NAMES)
   
   
-  print("About to do random forest regression")
-  rfe_cont_results_real <- rf_feat_sel_cont_rfe(dnds=dnds, respname="LOD_dNdS", feats=feats)
+  print("About to do random forest regression on features available for realistic data")
+  rfe_cont_results_real <- rf_feat_sel_cont_rfe(dnds=dnds, respname="SqDist_dn_minus_dS", feats=feats)
   
   # Save environment var to file
   save(rfe_cont_results_real, file="rfe_cont_results_real.RData")
@@ -687,9 +685,9 @@ do_predict_cont_real <- function() {
   print(paste0("Mem Bytes after RF=", mem_used()))
   
   # Get the predictions for all of the simulation data  
-  lod_dnds_dat <- dnds[rowSums(is.na(dnds[, c("LOD_dNdS", feats)])) == 0,]  
+  lod_dnds_dat <- dnds[rowSums(is.na(dnds[, c("SqDist_dn_minus_dS", feats)])) == 0,]  
   lod_dnds_dat$pred <- predict(rfe_cont_results_real$fit, lod_dnds_dat[, c(feats)])
-  lod_dnds_dat$residual <- lod_dnds_dat$LOD_dNdS - lod_dnds_dat$pred
+  lod_dnds_dat$residual <- lod_dnds_dat$SqDist_dn_minus_dS - lod_dnds_dat$pred
   
   # Get the MSE for all of the simulation data predictions
   mse <- mean((lod_dnds_dat$residual)^2)
@@ -697,7 +695,7 @@ do_predict_cont_real <- function() {
   print(mse)
   
   # Get the RSquared for all of the simulation data predictions
-  r2 <- rSquared(y=lod_dnds_dat$LOD_dNdS, resid=lod_dnds_dat$residual)
+  r2 <- rSquared(y=lod_dnds_dat$SqDist_dn_minus_dS, resid=lod_dnds_dat$residual)
   print("RSquared for all simulation data")
   print(r2)
   
@@ -706,12 +704,12 @@ do_predict_cont_real <- function() {
   write.table(lod_dnds_dat, file="umberjack_accuracy_predict.real.csv", sep=",", row.names=FALSE)
   
   # Plot the random forest regression fit
-  fig <- ggplot(lod_dnds_dat, aes(x=LOD_dNdS, y=pred)) + 
+  fig <- ggplot(lod_dnds_dat, aes(x=SqDist_dn_minus_dS, y=pred)) + 
     geom_point(alpha=0.5, shape=1) +
     geom_smooth(method="lm") + 
     geom_abline(color="red") +
-    xlab("\n Ln (Umberjack / True dNdS)") + 
-    ylab("RF Predicted Ln (Umberjack / True dNdS) \n")
+    xlab("\n [(Umberjack dn-ds) - (True dn-ds)]^2") + 
+    ylab("RF Predicted [(Umberjack dn-ds) - (True dn-ds)]^2 \n")
   ggtitle(paste("RandomForest Regression in R r^2=", r2, sep=""))
   
   ggsave(filename="RandomForestRegressionRsq.real.pdf", plot=fig, device=pdf)

@@ -20,6 +20,8 @@ source("./load_all_sim_dnds.R")
 args <- commandArgs(TRUE)
 if (length(args) >= 1) {
   dnds_filename <- args[1]
+} else {
+  dnds_filename <- NULL
 }
 slaves <- startMPIcluster(count=PROCS)
 registerDoMPI(slaves)
