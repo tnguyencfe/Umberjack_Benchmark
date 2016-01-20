@@ -518,7 +518,7 @@ rf_train <- function(dnds, respname, feats) {
 
 
 # Does all the work for regression
-do_predict_cont <- function(dnds_filename=NULL, respname, folds=5, trees_per_rf=501, cores_per_rf=1) {
+do_predict_cont <- function(dnds_filename=NULL, folds=5, trees_per_rf=501, cores_per_rf=1) {
   
   dnds <- get_all_sim_dnds(dnds_filename)
   dim(dnds)
@@ -531,7 +531,7 @@ do_predict_cont <- function(dnds_filename=NULL, respname, folds=5, trees_per_rf=
   
   
   print("About to do random forest regression")
-  rfe_cont_results <- rf_feat_sel_cont_rfe(dnds=dnds, respname=respname, feats=feats, 
+  rfe_cont_results <- rf_feat_sel_cont_rfe(dnds=dnds, respname="SqDist_dn_minus_dS", feats=feats, 
                                            folds=folds, trees_per_rf=trees_per_rf, cores_per_rf=cores_per_rf)
   
   print(paste0("Mem Bytes after RF=", mem_used()))

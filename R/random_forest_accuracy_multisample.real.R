@@ -26,10 +26,15 @@ if (length(args) >= 1) {
   dnds_filename <- NULL
 }
 
-slaves <- startMPIcluster(count=FOLDS * CORES_PER_RF)
+if (length(args) >= 2) {
+  cores_per_rf <- as.integer(args[2])
+} else {
+  cores_per_rf <- CORES_PER_RF
+}
+slaves <- startMPIcluster(count=FOLDS * cores_per_rf)
 registerDoMPI(slaves)
 
-do_predict_cont_real(dnds_filename=dnds_filename, folds=FOLDS, trees_per_rf=TREES_PER_RF, cores_per_rf=CORES_PER_RF)
+do_predict_cont_real(dnds_filename=dnds_filename, folds=FOLDS, trees_per_rf=TREES_PER_RF, cores_per_rf=cores_per_rf)
 
 closeCluster(slaves)
 mpi.quit()

@@ -1,7 +1,7 @@
 # Uses random forest feature selection to determine best features that affect dnds estimate accuracy
 # This is just an mpi wrapper for load_all_sim_dnds.R which does all the work
 
-
+# Execute with optional parameters  Rscript random_forest_accuracy_multisample.R [per sample dnds csv] [cores per random forest]
 
 library(caret)
 library(plyr)
@@ -25,10 +25,15 @@ if (length(args) >= 1) {
   dnds_filename <- NULL
 }
 
-slaves <- startMPIcluster(count=FOLDS * CORES_PER_RF)
+if (length(args) >= 2) {
+  cores_per_rf <- as.integer(args[2])
+} else {
+  cores_per_rf <- CORES_PER_RF
+}
+slaves <- startMPIcluster(count=(FOLDS * cores_per_rf))
 registerDoMPI(slaves)
 
-do_predict_cont(dnds_filename=dnds_filename, folds=FOLDS, trees_per_rf=TREES_PER_RF, cores_per_rf=CORES_PER_RF)
+do_predict_cont(dnds_filename=dnds_filename, folds=FOLDS, trees_per_rf=TREES_PER_RF, cores_per_rf=cores_per_rf)
 
 closeCluster(slaves)
 mpi.quit()
