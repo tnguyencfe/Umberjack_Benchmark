@@ -697,7 +697,7 @@ do_predict_cont_real <- function(dnds_filename=NULL, folds=5, trees_per_rf=501, 
     
   # plot the results
   fig <- ggplot(rfe_cont_results_real, metric = rfe_cont_results_real$metric[1], output = "layered")
-  ggsave(filename="RandomForestRegressionFeatureElbow.pdf", plot=fig, device=pdf)
+  ggsave(filename="RandomForestRegressionFeatureElbow.real.pdf", plot=fig, device=pdf)
     
   print(paste0("Mem Bytes after RF=", mem_used()))
   
