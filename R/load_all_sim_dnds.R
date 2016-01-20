@@ -2,8 +2,11 @@ library(plyr)
 library(pryr)
 library(caret)
 library(randomForest)
+library(foreach)
 
 PSEUDOCOUNT <- 1e-7
+
+
 
 NUM_RESP_NAMES <- c("LOD_dNdS", "Dist_dn_minus_dS", "AbsLOD_dNdS", "AbsDist_dn_minus_dS", "SqDist_dn_minus_dS")
 CAT_RESP_NAMES <- c("CrapLOD", "CrapDist")
@@ -79,14 +82,15 @@ LM_COVAR_NAMES <- c(CAT_COVAR_NAMES, COVAR_NAMES)
 
 REAL_LM_COVAR_NAMES <- c("Reads.Act",
                          "UnambigCodonRate.Act",
+                         "UnknownPerCodon.Act",
                          "AADepth.Act",
                          "ConserveCodon.Act",
                          "EntropyCodon.Act",
                          "N.Act",
                          "S.Act",
-                         "TreeLenPerRead.Act",
+                         "TreeLen.Act",
                          "TreeDepth.Act",
-                         "PolytomyPerRead.Act",
+                         "Polytomy.Act",
                          "ResolvedPerSub.Act",                                                  
                          "Window_Entropy.Act", "Window_UnambigCodonRate.Act", "Window_Subst.Act"
                          )
@@ -370,7 +374,7 @@ rf_feat_sel_class_rfe <- function(dnds, respname, feats, xfold=1) {
 
 
 # Random Forest, Recursive Feature Elmination  (Backwards Selection)  for continuous response
-rf_feat_sel_cont_rfe <- function(dnds, respname, feats) {
+rf_feat_sel_cont_rfe <- function(dnds, respname, feats, folds, trees_per_rf, cores_per_rf) {
   
   print(paste0("Response=", respname))
   print(paste0("Features=", paste0(feats, collapse=", ")))
@@ -382,17 +386,30 @@ rf_feat_sel_cont_rfe <- function(dnds, respname, feats) {
   print("Cleaned dnds summary:")
   print(summary(cleandnds))
   
-  # Override default number of trees from 500 to 501 to break ties
+  # Override default number of trees from 500 to 501 to break ties, Use parallelized random forest
   new_rfFuncs <- rfFuncs
   new_rfFuncs$fit <- 
     function (x, y, first, last, ...) 
     {
-      library(randomForest)
-      randomForest(x, y, importance = first, ntree=501, ...)
-    }
+      library(randomForest)      
+      
+      # Use randomForest's builtin combine function     
+      # Divide trees evenly into the amount we want to parallelize.
+      # If it won't divide evenly, then the last tree will have the leftovers.
+      trees_per_core <- trees_per_rf %/% cores_per_rf
+      leftover_trees_per_core <- trees_per_rf - trees_per_core * (cores_per_rf-1)
+      
+      parallel_randomForest <- foreach(ntree=c(rep(trees_per_core, cores_per_rf-1), leftover_trees_per_core),
+                                       .combine=combine, .packages='randomForest') %dopar% {
+        randomForest(x, y, importance = first, ntree=ntree, ...)
+      }
+      return (parallel_randomForest)
+      
+    } 
+  
   # Random Forest Selection Function
   # This will auto resample and create bags for us.
-  control <- rfeControl(functions=new_rfFuncs, method="boot", number=FOLDS, 
+  control <- rfeControl(functions=new_rfFuncs, method="boot", number=folds, 
                         #rerank=TRUE,  # rerank features after eliminate
                         saveDetails=TRUE,   # save predictions and variable importances from selection process
                         returnResamp="all",   # save all resampling summary metrics
@@ -408,16 +425,14 @@ rf_feat_sel_cont_rfe <- function(dnds, respname, feats) {
                           )
   
   # Save the rfe_cont_results environment object to file.
-  save(rfe_cont_results, file="rfe_cont_results.RData")
-  # Save the training dataset to feil
-  save(cleandnds, file="cleandnds.RData")
+  #save(rfe_cont_results, file="rfe_cont_results.RData")
+  # Save the training dataset to file
+  #save(cleandnds, file="cleandnds.RData")
   
   print(rfe_cont_results)
   # list the chosen features
   print(paste0("Predictors\n", predictors(rfe_cont_results)))  # results$optVariables also does the same
-  # plot the results
-  fig <- plot(rfe_cont_results, type=c("g", "o"))
-  print(fig)
+  
   # per-variable importance
   print("Variable Importance")
   print(varImp(rfe_cont_results))
@@ -503,7 +518,7 @@ rf_train <- function(dnds, respname, feats) {
 
 
 # Does all the work for regression
-do_predict_cont <- function(dnds_filename=NULL) {
+do_predict_cont <- function(dnds_filename=NULL, respname, folds=5, trees_per_rf=501, cores_per_rf=1) {
   
   dnds <- get_all_sim_dnds(dnds_filename)
   dim(dnds)
@@ -516,7 +531,8 @@ do_predict_cont <- function(dnds_filename=NULL) {
   
   
   print("About to do random forest regression")
-  rfe_cont_results <- rf_feat_sel_cont_rfe(dnds=dnds, respname="SqDist_dn_minus_dS", feats=feats)
+  rfe_cont_results <- rf_feat_sel_cont_rfe(dnds=dnds, respname=respname, feats=feats, 
+                                           folds=folds, trees_per_rf=trees_per_rf, cores_per_rf=cores_per_rf)
   
   print(paste0("Mem Bytes after RF=", mem_used()))
   
@@ -659,9 +675,8 @@ do_predict_class_diversify_real <- function() {
   
 }
 
-
 # Does all the work for finding Umberjack accuracy for regression on real sites 
-do_predict_cont_real <- function(dnds_filename=NULL) {
+do_predict_cont_real <- function(dnds_filename=NULL, folds=5, trees_per_rf=501, cores_per_rf=1) {
   
   dnds <- get_all_sim_dnds(dnds_filename)
   dim(dnds)
@@ -674,11 +689,16 @@ do_predict_cont_real <- function(dnds_filename=NULL) {
   
   
   print("About to do random forest regression on features available for realistic data")
-  rfe_cont_results_real <- rf_feat_sel_cont_rfe(dnds=dnds, respname="SqDist_dn_minus_dS", feats=feats)
+  rfe_cont_results_real <- rf_feat_sel_cont_rfe(dnds=dnds, respname="SqDist_dn_minus_dS", feats=feats, 
+                                                folds=folds, trees_per_rf=trees_per_rf, cores_per_rf=cores_per_rf)
   
   # Save environment var to file
   save(rfe_cont_results_real, file="rfe_cont_results_real.RData")
-  
+    
+  # plot the results
+  fig <- ggplot(rfe_cont_results_real, metric = rfe_cont_results_real$metric[1], output = "layered")
+  ggsave(filename="RandomForestRegressionFeatureElbow.pdf", plot=fig, device=pdf)
+    
   print(paste0("Mem Bytes after RF=", mem_used()))
   
   # Get the predictions for all of the simulation data  

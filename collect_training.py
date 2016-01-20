@@ -496,12 +496,19 @@ def make1csv(output_csv_filename, sim_args_tsv):
                                                     "Is_Break",  # whether the site is a recombinant breakpoint (start of new strand)
                                                     "BreakRatio.Act",  # sum across breakpoints (ratio of bases on either side of breakpoint)
                                                     "Reads.Act", # max read depth for entire slice
-                                                    "UnambigCodonRate.Act", # Total unambiguous codon (depth) at the codon site / max read depth for entire slice
+                                                    # Total unambiguous codon (depth) at the codon site / max read depth for entire slice
+                                                    # This number will be in [0, 1]
+                                                    "UnambigCodonRate.Act",
                                                     "AADepth.Act",  # Total codons that code for only 1 amino acid at the codon site
                                                     "PopSize.Act",  # Population size
                                                     "ConserveCodon.Act",
                                                     "EntropyCodon.Act",  # Excludes codons with N's and gaps
-                                                    "UnknownPerCodon.Act",  # Average N or gaps per codon at this site
+                                                     # Average N, gaps, or pads per codon at this site.
+                                                     # This is different from UnambigCodonRate.Act because this tells us whether there are
+                                                     # lots of codons that are only partial, indicating poor reads or alignment,
+                                                     # versus completely uncovered by reads.
+                                                     # This nubmer will be in [0, 3]
+                                                    "UnknownPerCodon.Act",
                                                     "ErrPerCodon.Act",  # Average erroneous bases per codon at this site
                                                     "N.Act", "S.Act",
                                                     "EN.Act", "ES.Act",

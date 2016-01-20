@@ -13,7 +13,8 @@ library(miscTools)  # for rSquared
 
 FOLDS <- 5
 SEED <- 7
-PROCS <- 5
+CORES_PER_RF <- 4  # We do cross validation in parallel.  But for each cross validation, we also do the random forest trees in parallel
+TREES_PER_RF <- 501  # total random forest trees to execute for each cross validation
 
 source("./load_all_sim_dnds.R")
 
@@ -23,10 +24,11 @@ if (length(args) >= 1) {
 } else {
   dnds_filename <- NULL
 }
-slaves <- startMPIcluster(count=PROCS)
+
+slaves <- startMPIcluster(count=FOLDS * CORES_PER_RF)
 registerDoMPI(slaves)
 
-do_predict_cont(dnds_filename)
+do_predict_cont(dnds_filename=dnds_filename, folds=FOLDS, trees_per_rf=TREES_PER_RF, cores_per_rf=CORES_PER_RF)
 
 closeCluster(slaves)
 mpi.quit()
