@@ -63,7 +63,7 @@ COVAR_NAMES <- NUM_NAMES[!NUM_NAMES %in%
                              #"Window_UnambigCodonRate.Act",
                              # These are highly correlated with N, S
                              "Subst.Act", "Subst.Exp",
-                             "EN.Exp", "ES.Exp", "EN.Act", "ES.Act",  "N.Exp", "S.Exp",
+                             "EN.Exp", "ES.Exp", "N.Exp", "S.Exp",
                              "Window_Start", "Window_End", "CodonSite", "Reads.Act", "PopSize.Act", "Is_Break"
                            )
                          ]
