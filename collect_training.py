@@ -295,6 +295,8 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
                         total_subs = resolved_ns +  resolved_s +  obs_ns +  obs_s
                         if total_subs:
                             outrow["ResolvedPerSub"] = (resolved_ns + resolved_s) / float(total_subs)
+                        else:
+                            outrow["ResolvedPerSub"] = 0
 
                         dnds_info = reader.next()  # Every codon site is a row in the *.dnds.tsv file
                         if codonoffset_0based != int(dnds_info["Site"]):
@@ -329,6 +331,7 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
             finally:
                 if fh_dnds_tsv and not fh_dnds_tsv.closed:
                     fh_dnds_tsv.close()
+
 
 def cmp_freq_distro(obs_freq_distro, exp_freq_distro, is_scale=True):
     """

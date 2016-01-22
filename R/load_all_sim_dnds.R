@@ -3,6 +3,8 @@ library(pryr)
 library(caret)
 library(randomForest)
 library(foreach)
+library(miscTools)  # for rSquared
+
 
 PSEUDOCOUNT <- 1e-7
 
@@ -88,9 +90,9 @@ REAL_LM_COVAR_NAMES <- c("Reads.Act",
                          "EntropyCodon.Act",
                          "N.Act",
                          "S.Act",
-                         "TreeLen.Act",
+                         "TreeLenPerRead.Act",,
                          "TreeDepth.Act",
-                         "Polytomy.Act",
+                         "PolytomyPerRead.Act",
                          "ResolvedPerSub.Act",                                                  
                          "Window_Entropy.Act", "Window_UnambigCodonRate.Act", "Window_Subst.Act"
                          )

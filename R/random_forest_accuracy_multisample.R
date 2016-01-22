@@ -9,7 +9,7 @@ library(doMPI)  # for MPI parallelism
 library(randomForest)
 library(pryr)
 #install.packages("pryr", repos=c("http://cran.stat.sfu.ca/"))
-library(miscTools)  # for rSquared
+
 
 FOLDS <- 5
 SEED <- 7
