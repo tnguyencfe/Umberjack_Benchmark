@@ -273,6 +273,9 @@ get_all_sim_dnds <- function(dnds_filename=NULL) {
   dnds$wrongSelect <- as.factor((dnds$dN_minus_dS.Act < 0 & dnds$dN_minus_dS.Exp > 0) | (dnds$dN_minus_dS.Act > 0 & dnds$dN_minus_dS.Exp < 0))
   dnds$wrongSelect[is.na(dnds$wrongSelect)] <- TRUE
   
+  # Remove sites with no subs
+  dnds <- subset(dnds, dnds$Subst.Act > 0)
+
   return (dnds)
 }
 
@@ -683,10 +686,10 @@ do_predict_class_diversify_real <- function() {
 do_predict_cont_real <- function(dnds_filename=NULL, folds=5, trees_per_rf=501, cores_per_rf=1) {
   
   dnds <- get_all_sim_dnds(dnds_filename)
-  dim(dnds)
-  summary(dnds)
-  head(dnds)
-  object_size(dnds)
+  print(dim(dnds))
+  print(summary(dnds))
+  print(head(dnds))
+  print(object_size(dnds))
   print(paste0("mem used from dnds=", mem_used()))
   
   feats <- c(REAL_LM_COVAR_NAMES)
