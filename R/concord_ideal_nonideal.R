@@ -1,4 +1,5 @@
-library(knitr)
+
+source("plot_helper.R")
 
 READLEN <- 250
 BASE_SIZE <- 24
@@ -78,6 +79,11 @@ dnds_filename <- "/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/collate
 
 load(file="/home/thuy/gitrepo/Umberjack_Benchmark/R/lhs_regression_real_fix/rfe_cont_results_real.RData")
 summary(rfe_cont_results_real)
+
+# Use Breiman normality test for z-score
+import <- varImp(rfe_cont_results_real)
+import$p.value <- 2*pnorm(-abs(import$Overall))
+print(import)
 
 dnds <- get_all_sim_dnds(dnds_filename)  
 dnds$Is_Ideal <- as.factor(dnds$File %in% ideal$Name)
@@ -161,13 +167,13 @@ print(r2)
 dnds_range <- outlier_range(c(lod_dnds_dat$SqDist_dn_minus_dS, lod_dnds_dat$pred))
 
 fig <- ggplot(lod_dnds_dat, aes(x=SqDist_dn_minus_dS, y=pred)) + 
-  geom_point(shape=1) +
+  geom_point(alpha=0.5, shape=1) +
   geom_smooth(method="lm", se=FALSE) + 
   geom_abline(color="red") +
-  #scale_x_continuous(limits=c(0, 3)) + 
-  #scale_y_continuous(limits=c(0, 3)) + 
-  xlab("\n Umberjack Inaccuracy") + 
-  ylab("RF Predicted Umberjack Inaccuracy \n") + 
+#   scale_x_continuous(limits=c(0, 6000)) + 
+#   scale_y_continuous(limits=c(0, 6000)) + 
+  xlab(expression(Delta)) + 
+  ylab(expression(paste("Random Forest Predicted ", Delta))) + 
   theme_bw(BASE_SIZE)
 print(fig)
 
@@ -176,19 +182,41 @@ print(fig)
 # From http://stackoverflow.com/questions/5219671/it-is-possible-to-create-inset-graphs-using-ggplot2
 # Make inset plot
 blowfig <- ggplot(lod_dnds_dat, aes(x=SqDist_dn_minus_dS, y=pred)) + 
-  geom_point(shape=1) +
+  geom_point(alpha=0.1, shape=1) +
   geom_smooth(method="lm", se=FALSE) + 
   geom_abline(color="red") +
   scale_x_continuous(limits=c(0, 3)) + 
-  scale_y_continuous(limits=c(0, 3)) 
+  scale_y_continuous(limits=c(0, 3)) +
+  theme_bw(BASE_SIZE) + 
+  theme(axis.title = element_blank())
 print(blowfig)
 
 #A viewport taking up a fraction of the plot area
-vp <- viewport(width = 0.4, height = 0.4, x = 0.1, y = 0.8)
+vp <- viewport(width = 0.4, height = 0.4, x = 0.6, y = 0.125, just=c("left", "bottom"))
 
 #Just draw the plot twice
-pdf(paste0(THESIS_OUTDIR, "/umberjack/RandomForestRegressionRsq_real.pdf"))
+png(paste0(THESIS_OUTDIR, "/umberjack/RandomForestRegressionRsq_real.png"), width=560, height=560)
 print(fig)
 print(blowfig, vp=vp)
 dev.off() 
 #ggsave(filename=paste0(THESIS_OUTDIR, "/umberjack/RandomForestRegressionRsq_real.pdf"), plot=fig, device=pdf)
+
+
+# Load in the full training data (not real dataset)
+# Nope!  Looks like I saved th wrong .RData file  :(
+#load(file="/home/thuy/gitrepo/Umberjack_Benchmark/R/lhs_regression_fix/rfe_cont_results.RData")
+#summary(rfe_cont_results)
+
+# Load in the importances manually
+#importnonreal <- varImp(rfe_cont_results)
+importnonreal <- read.table('/home/thuy/gitrepo/Umberjack_Benchmark/R/lhs_regression_fix/importance.csv', sep=",", header=TRUE)
+# use the increase in MSE () normalized by stddev as zscore
+# See http://www.statistik.uni-dortmund.de/useR-2008/slides/Strobl+Zeileis.pdf
+importnonreal$p.value <- 2*pnorm(-abs(importnonreal$IncMSE))
+print(importnonreal)
+
+library(xtable)
+xtable(importnonreal, 
+       display=c("s", "s", "g", "E"), 
+       digits=10,
+       caption="Importance of Feature on Prediction of Umberjack Error.", type="latex")
