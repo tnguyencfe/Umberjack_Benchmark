@@ -64,7 +64,11 @@ COVAR_NAMES <- NUM_NAMES[!NUM_NAMES %in%
                              # These are highly correlated with N, S
                              "Subst.Act", "Subst.Exp",
                              "EN.Exp", "ES.Exp", "N.Exp", "S.Exp",
-                             "Window_Start", "Window_End", "CodonSite", "Reads.Act", "PopSize.Act", "Is_Break"
+                             "Window_Start", "Window_End", "CodonSite", "Reads.Act", "PopSize.Act", "Is_Break",
+                             "TreeLen.Act",
+                             "TreeDist.Act",  #  too much overlap with TreeDistPerRead.Act
+                             "Polytomy.Act",
+                             "UnknownPerCodon.Act"
                            )
                          ]
 
@@ -77,7 +81,7 @@ WINDOW_COVAR_NAMES <- c("BreakRatio.Act", "Window_Breaks", "TreeLen.Act", "TreeD
 WINDOW_SITE_COVAR_NAMES <- COVAR_NAMES[!COVAR_NAMES %in% WINDOW_COVAR_NAMES]
 
 # categorical variables
-CAT_COVAR_NAMES <- c("IsLowSubst.Act")
+CAT_COVAR_NAMES <- c() # c("IsLowSubst.Act")
 
 # variables used in linear regression
 LM_COVAR_NAMES <- c(CAT_COVAR_NAMES, COVAR_NAMES)

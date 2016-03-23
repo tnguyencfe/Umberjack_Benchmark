@@ -9,24 +9,24 @@ options(width=150)
 # From data from all windows, aggregates by averaging over windows
 library(ggplot2)
 library(reshape2)
-library(epiR)
+#library(epiR)
 library(plyr)
-library(stats)
-library(psych)
-library(GGally)
-library(MASS)
-library(gplots)
+#library(stats)
+#library(psych)
+#library(GGally)
+library(MASS)  # stepAIC
+#library(gplots)
 library(RColorBrewer)
-library(nortest)
-library(devtools)
-library(ggbiplot)
-library(directlabels)
-library(gamlss)
-library(logistf)
+#library(nortest)
+#library(devtools)
+#library(ggbiplot)
+#library(directlabels)
+#library(gamlss)
+#library(logistf)
 library(speedglm)  # faster glms in parallel
-library(caret)  # for finding correlations
-library(gtools)  # for inv.logit
-library(arm)  # for binned.plot for logistic regresison residuals
+#library(caret)  # for finding correlations
+#library(gtools)  # for inv.logit
+#library(arm)  # for binned.plot for logistic regresison residuals
 source ('./speedStepAIC.R')
 source('./load_all_sim_dnds.R')
 source("../../SlidingWindow/test/simulations/R/plot_helper.R")  # sliding window git repo
@@ -266,7 +266,10 @@ print(fig)
 # Expects continuous response for speedglm
 fit_and_plot_glm_fast <- function(resp_colname, fit, df) {
   
-  bestfit <- stepAIC(fit, direction="both", trace=FALSE)
+  #bestfit <- stepAIC(fit, direction="both", trace=FALSE)
+  #bestfit <- mystepAIC(fit, direction="both", trace=FALSE, use.start=TRUE)
+  bestfit <- mystepAIC(fit, direction="backward", trace=FALSE, use.start=TRUE)
+  
   print(summary(bestfit))
   
   # speedglm doesn't expose residuals or fitted values. Do it ourselves
@@ -329,12 +332,68 @@ dim(cleandnds)
 # print(summary(allfitLOD))
 # bestfit <- fit_and_plot_glm_fast("AbsLOD_dNdS", allfitLOD, df=cleandnds)
 
-
+# hack for backwards compatibility when we didn't auto remove resolved codons from Umberjack
+if (!"ResolvedPerSub.Act" %in% colnames(dnds)) {
+  LM_COVAR_NAMES <-  LM_COVAR_NAMES[!LM_COVAR_NAMES %in% c("ResolvedPerSub.Act" )]  
+}
 
 DistFormula <- as.formula(paste0("SqDist_dn_minus_dS~", paste0(LM_COVAR_NAMES, collapse=" + ")))
 print(DistFormula)
-allfitDist <- speedglm(DistFormula, data=cleandnds)
+allfitDist <- speedglm(DistFormula, data=cleandnds, family=Gamma()
+                       #start=rep(1, length(LM_COVAR_NAMES) + 1)
+                       )
+
+allfitDist <- glm(DistFormula, data=cleandnds, family=Gamma(),
+                       start=rep(1, length(LM_COVAR_NAMES) + 1))
+
+# x <- model.matrix(allfitDist)
+# jj <- setdiff(seq(ncol(x)), 2)
+# start <- start <- allfitDist$coefficients[jj]
+# 
+# 
+# z <-  glm.fit(x[, jj, drop = FALSE], allfitDist$y, allfitDist$prior.weights, offset=allfitDist$offset,
+#               #start=start,  # pass in start values
+#               start=start,  # pass in start values
+#               #etastart=allfitDist$linear.predictors,
+#               #mustart=rep(mean(allfitDist$fitted.values, na.rm=TRUE), length(start)),
+#               family=allfitDist$family, control=allfitDist$control)  
+# 
+# 
+# 
+# allfitDist <- glm(SqDist_dn_minus_dS ~ UnambigCodonRate.Act + 
+#                     AADepth.Act + EntropyCodon.Act + ErrPerCodon.Act + N.Act + 
+#                     S.Act + EN.Act + ES.Act + TreeLenPerRead.Act + TreeDepth.Act + 
+#                     TreeDistPerRead.Act + PolytomyPerRead.Act + P_SameCodonFreq.Act + 
+#                     EntropyCodon.Exp,
+#                   data=cleandnds, family=Gamma(),
+#                   #start=rep(1, length(LM_COVAR_NAMES) + 1))
+#                   start=rep(1, length(LM_COVAR_NAMES) ))
+# 
+# 
+# update(allfitDist, formula= ~ UnambigCodonRate.Act + 
+#          AADepth.Act + EntropyCodon.Act + ErrPerCodon.Act + N.Act + 
+#          S.Act + EN.Act + ES.Act + TreeLenPerRead.Act + TreeDepth.Act + 
+#          TreeDistPerRead.Act + PolytomyPerRead.Act + P_SameCodonFreq.Act + 
+#          EntropyCodon.Exp,
+#        start=rep(1, length(LM_COVAR_NAMES) )
+#        )
+# 
+# test <- update(allfitDist, formula= as.formula(paste0("~. -", names(coefficients(allfitDist))[2])),
+#        start=start)
+# )
+
 print(summary(allfitDist))
+#update(allfitDist, formula=SqDist_dn_minus_dS ~ BreakRatio.Act + UnambigCodonRate.Act ,
+#       start=rep(1, 3))
 bestfit <- fit_and_plot_glm_fast("SqDist_dn_minus_dS", allfitDist, df=cleandnds)
+
+#library(biglm)
+#bigglm(formula, data, family=gaussian(),...)
+#bigfit <- bigglm(DistFormula, data=cleandnds, family=Gamma())
+#bigfit <- bigglm(SqDist_dn_minus_dS ~ EntropyCodon.Act , data=cleandnds, family=Gamma())
+# Gives:
+# Error in coef.bigqr(object$qr) : 
+#   NA/NaN/Inf in foreign function call (arg 3)
+
 
 
