@@ -9,7 +9,7 @@ options(width=150)
 # From data from all windows, aggregates by averaging over windows
 library(ggplot2)
 library(reshape2)
-#library(epiR)
+library(epiR) # concordance
 library(plyr)
 #library(stats)
 #library(psych)
@@ -27,6 +27,7 @@ library(speedglm)  # faster glms in parallel
 #library(caret)  # for finding correlations
 #library(gtools)  # for inv.logit
 #library(arm)  # for binned.plot for logistic regresison residuals
+library(miscTools) # for rsquared
 source ('./speedStepAIC.R')
 source('./load_all_sim_dnds.R')
 source("../../SlidingWindow/test/simulations/R/plot_helper.R")  # sliding window git repo
@@ -124,12 +125,14 @@ plot_resp_vs_var(data=dnds, resp_colname="SqDist_dn_minus_dS", var_colnames=WIND
 #' 
 concord <- epi.ccc(dnds[!is.na(dnds$dNdS.Act) & !is.na(dnds$dNdS.Exp), ]$dNdS.Act, 
                    dnds[!is.na(dnds$dNdS.Act) & !is.na(dnds$dNdS.Exp), ]$dNdS.Exp)
+print(concord$rho.c)
 print(concord$rho.c$est)
 #' **Concordance for dN/dS when all considered = `r concord$rho.c$est`**
 #' 
 
 concord <- epi.ccc(dnds[!is.na(dnds$dN_minus_dS.Act) & !is.na(dnds$dN_minus_dS.Exp), ]$dN_minus_dS.Act, 
                    dnds[!is.na(dnds$dN_minus_dS.Act) & !is.na(dnds$dN_minus_dS.Exp), ]$dN_minus_dS.Exp)
+print(concord$rho.c)
 print(concord$rho.c$est)
 #' **Concordance for dN-dS when all considered = `r concord$rho.c$est`**
 #' 
@@ -268,7 +271,7 @@ fit_and_plot_glm_fast <- function(resp_colname, fit, df) {
   
   #bestfit <- stepAIC(fit, direction="both", trace=FALSE)
   #bestfit <- mystepAIC(fit, direction="both", trace=FALSE, use.start=TRUE)
-  bestfit <- mystepAIC(fit, direction="backward", trace=FALSE, use.start=TRUE)
+  bestfit <- mystepAIC(fit, direction="backward", trace=TRUE, use.start=TRUE)
   
   print(summary(bestfit))
   
@@ -280,10 +283,15 @@ fit_and_plot_glm_fast <- function(resp_colname, fit, df) {
   if (length(grep("IsLowSubst.Act", colnames(df_fit)) > 0)){
     df_fit$IsLowSubst.Act <- ifelse (df_fit$IsLowSubst.Act == TRUE, 1, 0)  
   }
-  df_fit$fitted.values <- as.vector(as.matrix(df_fit) %*% coef(bestfit))
-  df_fit[, resp_colname] <-  df[, resp_colname]    
-  df_fit$residuals <-  df_fit[, resp_colname] -df_fit$fitted.values
-  summary(df_fit)
+  if (!"residuals" %in% names(bestfit)) {
+    df_fit$fitted.values <- as.vector(as.matrix(df_fit) %*% coef(bestfit))
+    df_fit[, resp_colname] <-  df[, resp_colname]    
+    df_fit$residuals <-  df_fit[, resp_colname] -df_fit$fitted.values  
+  } else {
+    df_fit$fitted.values <- bestfit$fitted.values
+    df_fit[, resp_colname] <-  df[, resp_colname]    
+    df_fit$residuals <-  bestfit$residuals  
+  }
   
   fig <- ggplot(df_fit, aes(x=fitted.values, y=residuals)) + 
     geom_point(alpha=0.5, shape=1) + 
@@ -333,7 +341,8 @@ dim(cleandnds)
 # bestfit <- fit_and_plot_glm_fast("AbsLOD_dNdS", allfitLOD, df=cleandnds)
 
 # hack for backwards compatibility when we didn't auto remove resolved codons from Umberjack
-if (!"ResolvedPerSub.Act" %in% colnames(dnds)) {
+# Or there are no resolved substitutions, then don't bother using it in the GLM
+if (!"ResolvedPerSub.Act" %in% colnames(dnds) |  sum(cleandnds$ResolvedPerSub.Act > 0, na.rm=TRUE) == 0) {
   LM_COVAR_NAMES <-  LM_COVAR_NAMES[!LM_COVAR_NAMES %in% c("ResolvedPerSub.Act" )]  
 }
 
@@ -343,49 +352,60 @@ allfitDist <- speedglm(DistFormula, data=cleandnds, family=Gamma()
                        #start=rep(1, length(LM_COVAR_NAMES) + 1)
                        )
 
-allfitDist <- glm(DistFormula, data=cleandnds, family=Gamma(),
+# allfitDist <- glm(DistFormula, data=cleandnds,
+#                        start=rep(1, length(LM_COVAR_NAMES) + 1))
+
+bestfit <- fit_and_plot_glm_fast("SqDist_dn_minus_dS", allfitDist, df=cleandnds)
+plot(allfitDist)
+plot(bestfit)
+r2 <- rSquared(y=bestfit$y, resid=bestfit$residuals)
+print (paste0("rsqured = ", r2))
+
+
+cleandnds$GammaSqDist_dn_minus_dS <- cleandnds$SqDist_dn_minus_dS
+cleandnds$GammaSqDist_dn_minus_dS[cleandnds$GammaSqDist_dn_minus_dS == 0] <- 1e-4
+summary(cleandnds)
+gammaDistFormula <- as.formula(paste0("GammaSqDist_dn_minus_dS ~", paste0(LM_COVAR_NAMES, collapse=" + ")))
+print(gammaDistFormula)
+
+allfitDist <- glm(gammaDistFormula, data=cleandnds, family=Gamma(),
                        start=rep(1, length(LM_COVAR_NAMES) + 1))
 
-# x <- model.matrix(allfitDist)
-# jj <- setdiff(seq(ncol(x)), 2)
-# start <- start <- allfitDist$coefficients[jj]
-# 
-# 
-# z <-  glm.fit(x[, jj, drop = FALSE], allfitDist$y, allfitDist$prior.weights, offset=allfitDist$offset,
-#               #start=start,  # pass in start values
-#               start=start,  # pass in start values
-#               #etastart=allfitDist$linear.predictors,
-#               #mustart=rep(mean(allfitDist$fitted.values, na.rm=TRUE), length(start)),
-#               family=allfitDist$family, control=allfitDist$control)  
-# 
-# 
-# 
-# allfitDist <- glm(SqDist_dn_minus_dS ~ UnambigCodonRate.Act + 
-#                     AADepth.Act + EntropyCodon.Act + ErrPerCodon.Act + N.Act + 
-#                     S.Act + EN.Act + ES.Act + TreeLenPerRead.Act + TreeDepth.Act + 
-#                     TreeDistPerRead.Act + PolytomyPerRead.Act + P_SameCodonFreq.Act + 
-#                     EntropyCodon.Exp,
-#                   data=cleandnds, family=Gamma(),
-#                   #start=rep(1, length(LM_COVAR_NAMES) + 1))
-#                   start=rep(1, length(LM_COVAR_NAMES) ))
-# 
-# 
-# update(allfitDist, formula= ~ UnambigCodonRate.Act + 
-#          AADepth.Act + EntropyCodon.Act + ErrPerCodon.Act + N.Act + 
-#          S.Act + EN.Act + ES.Act + TreeLenPerRead.Act + TreeDepth.Act + 
-#          TreeDistPerRead.Act + PolytomyPerRead.Act + P_SameCodonFreq.Act + 
-#          EntropyCodon.Exp,
-#        start=rep(1, length(LM_COVAR_NAMES) )
-#        )
-# 
-# test <- update(allfitDist, formula= as.formula(paste0("~. -", names(coefficients(allfitDist))[2])),
-#        start=start)
-# )
 
 print(summary(allfitDist))
-#update(allfitDist, formula=SqDist_dn_minus_dS ~ BreakRatio.Act + UnambigCodonRate.Act ,
-#       start=rep(1, 3))
-bestfit <- fit_and_plot_glm_fast("SqDist_dn_minus_dS", allfitDist, df=cleandnds)
+plot(allfitDist)
+
+bestfit <- fit_and_plot_glm_fast("GammaSqDist_dn_minus_dS", allfitDist, df=cleandnds)
+plot(bestfit)
+r2 <- rSquared(y=bestfit$y, resid=bestfit$residuals)
+print (paste0("rsqured = ", r2))
+
+
+#' Individual predictors
+#' 
+for (predictor in LM_COVAR_NAMES) {
+  
+  oneform <- as.formula(paste0("GammaSqDist_dn_minus_dS ~ ", predictor))
+  print(oneform)
+  
+  onefit <- glm(oneform, data=cleandnds, family=Gamma(), 
+                start=rep(1, 2))
+  print(summary(onefit))
+  plot(onefit)
+}
+
+#' Individual predictors Gaussian.  These have large deviance than Gamma. Don't use.
+#' 
+for (predictor in LM_COVAR_NAMES) {
+  
+  oneform <- as.formula(paste0("SqDist_dn_minus_dS ~ ", predictor))
+  print(oneform)
+  
+  onefit <- glm(oneform, data=cleandnds, family=gaussian, 
+                start=rep(1, 2))
+  print(summary(onefit))
+  plot(onefit)
+}
 
 #library(biglm)
 #bigglm(formula, data, family=gaussian(),...)

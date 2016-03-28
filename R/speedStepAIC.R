@@ -48,28 +48,39 @@ mydropterm <-
       ii <- seq_along(asgn)[asgn == ndrop[i]]
       jj <- setdiff(seq(ncol(x)), ii)
       
+      start <- NULL
+      mustart <- NULL
+      etastart <- NULL
       if (!is.null(object$call$start )) {
         #origstart <- eval(object$call$start)  # pass in start values.  These are original start values.
         # Now only use the start values that corresond to the actual new formula
         
         #start <- origstart[1:length(jj)]  
         start <- rep(1, length(jj))
+        mustart <- rep(1, nrow(object$data))
+        etastart <- rep(1, nrow(object$data))
         #print (c(jj, start))
-      } else {
-        start <- NULL
-      }
+      } 
       
-      print (start)
+      #print (start)
       
       new_formula <-  as.formula(paste0("~. -", names(coefficients(object))[ii]))
       print(new_formula)
-      z <- update(object, formula = new_formula, start=start)
+      print(summary (mustart))
+      print(summary (etastart))
+      
+      # hack for Gamma GLM on full sim data.  complains invalid start values.  Start at 1, far from zero.
+      #z <- update(object, formula = new_formula, start=start, mustart=mustart, etastart=etastart)
 #       z <-  glm.fit(x[, jj, drop = FALSE], y, wt, offset=object$offset,
 #                     #start=start,  # pass in start values
 #                     start=start,  # pass in start values
-#                     etastart=object$linear.predictors,
-#                     mustart=rep(mean(object$fitted.values, na.rm=TRUE), length(start)),
+#                     etastart=etastart, #object$linear.predictors,
+#                     mustart=mustart, #rep(mean(object$fitted.values, na.rm=TRUE), length(start)),
 #                     family=object$family, control=object$control)  
+#       
+      z <- glm(new_formula, data=object$data, family=object$family,
+                             start=start, mustart=mustart, etastart=etastart)
+               
       dfs[i] <- z$rank
       dev[i] <- z$deviance
     }

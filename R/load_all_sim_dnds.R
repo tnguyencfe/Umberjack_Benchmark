@@ -49,7 +49,12 @@ NUM_NAMES <- c("Window_Start",
                "EN.Exp",
                "ES.Exp",
                "dNdS.Exp",
-               "dN_minus_dS.Exp")
+               "dN_minus_dS.Exp",
+               "Window_Breaks",
+               "Window_Entropy.Act",
+               "Window_UnambigCodonRate.Act",
+               "Window_ErrPerCodon.Act",
+               "Window_Subst.Act")
 
 # Numeric variables that might affect Umberjack accuracy
 COVAR_NAMES <- NUM_NAMES[!NUM_NAMES %in% 
