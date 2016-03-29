@@ -10,26 +10,26 @@ library(reshape2)
 library(epiR)
 library(plyr)
 library(stats)
-library(psych)
-library(GGally)
-library(MASS)
-library(caret)
+#library(psych)
+#library(GGally)
+#library(MASS)
+#library(caret)
 library(gplots)
 library(RColorBrewer)
-library(nortest)
+#library(nortest)
 library(devtools)
-library(ggbiplot)
-library(directlabels)
-library(gamlss)
-library(logistf)
-library(speedglm)  # faster glms in parallel
-library(caret)  # for finding correlations
-library(gtools)  # for inv.logit
-library(arm)  # for binned.plot for logistic regresison residuals
-source ('./speedStepAIC.R')
+#library(ggbiplot)
+#library(directlabels)
+#library(gamlss)
+#library(logistf)
+#library(speedglm)  # faster glms in parallel
+#library(caret)  # for finding correlations
+#library(gtools)  # for inv.logit
+#library(arm)  # for binned.plot for logistic regresison residuals
+#source ('./speedStepAIC.R')
 source('./load_all_sim_dnds.R')
 
-
+dnds_filename <- "/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/collate_all.recombo.csv"
 # Per Window-Site data
 if (exists("dnds_filename")) {
   dnds <- get_all_sim_dnds(dnds_filename)  
@@ -68,8 +68,8 @@ plot_resp_vs_var <- function(data, resp_colname, var_colnames, color_colname=NUL
                        geom_point(aes_string(color=color_colname), alpha=0.7, na.rm=TRUE) + 
                        geom_smooth(aes_string(color=color_colname, group=color_colname), method="lm", se=FALSE) + 
                        geom_smooth(method="lm", se=FALSE, color="black", size=2) + 
-                       scale_y_continuous(limits=c(max(resp_range["lower"], min(data[, resp_colname], na.rm=TRUE)), 
-                                                   min(resp_range["upper"], max(data[, resp_colname], na.rm=TRUE)))) + 
+#                        scale_y_continuous(limits=c(max(resp_range["lower"], min(data[, resp_colname], na.rm=TRUE)), 
+#                                                    min(resp_range["upper"], max(data[, resp_colname], na.rm=TRUE)))) + 
                        ggtitle("Inaccuracy Vs Covariate")
                      
                      if (colourCount > 12) {  # If there are way too many factors, there's no point in coloring them.
@@ -130,10 +130,23 @@ plot_gradient <- function(data, resp_colname, var_colname, color_colnames=NULL) 
 plot_gradient(data=window, resp_colname="WinSqDist_dn_minus_dS", 
               var_colname="TreeDist.Act",
               color_colnames=c("LogTreeLen.Act", "LogPolytomy.Act", "LogPolytomyPerTreeLen.Act", "PolytomyPerRead.Act", "LogTreeLenPerRead.Act",
-                               "LogReads.Act", "LogWindow_Subst.Act", "WinP_SameCodonFreq.Act"))
+                               "LogReads.Act", "LogWindow_Subst.Act", "WinP_SameCodonFreq.Act", "Window_Breaks"))
 
 #+ fig.width=10
 plot_gradient(data=window, resp_colname="WinSqDist_dn_minus_dS", 
               var_colname="TreeDistPerRead.Act",
               color_colnames=c("LogTreeLen.Act", "LogPolytomy.Act", "LogPolytomyPerTreeLen.Act", "PolytomyPerRead.Act", "LogTreeLenPerRead.Act",
-                               "LogReads.Act", "LogWindow_Subst.Act", "WinP_SameCodonFreq.Act"))
+                               "LogReads.Act", "LogWindow_Subst.Act", "WinP_SameCodonFreq.Act", "Window_Breaks"))
+
+#' Plot the window average accuracy colored by the Simulated Dataset
+#+ fig.width=15                                   
+fig <- ggplot(window, aes(x=TreeDistPerRead.Act, y=WinSqDist_dn_minus_dS)) + 
+ xlab(nice("TreeDistPerRead.Act")) + 
+ ylab(nice("WinSqDist_dn_minus_dS")) +                     
+ theme_bw() + 
+ geom_point(aes(color=File), alpha=0.7, na.rm=TRUE) +                      
+ geom_smooth(method="lm", se=FALSE, color="black", size=2) +                      
+ #scale_colour_gradient2(low="blue", mid="grey", high="red", midpoint=mean(window$File, na.rm=TRUE)) +
+ ggtitle("Inaccuracy By Dataset")
+print(fig)
+
