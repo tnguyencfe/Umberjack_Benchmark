@@ -50,7 +50,8 @@ summary(recombo_window)
 outlier_range <- function(x) {
   qnt <- quantile(x, probs=c(.25, .75), na.rm = TRUE, names=FALSE)
   fudge <- 1.5 * IQR(x, na.rm = TRUE)
-  return (c(lower=qnt[1] - fudge, upper=qnt[2] + fudge))
+  return (c(lower=max(qnt[1] - fudge, min(x, na.rm=TRUE)), 
+            upper=min(qnt[2] + fudge, max(x, na.rm=TRUE))))
 }
 
 
@@ -92,7 +93,9 @@ plot_gradient(data=recombo_window, resp_colname="WinSqDist_dn_minus_dS",
 
 THESIS_DIR <- '../../MutationPatterns/tex'
 
-#+ fig.width=10, fig.height=7
+#' Show effect of recombination alone on umberjack inaccuracy, highlighting effects of low diversity
+#' 
+#+ fig.width=3, fig.height=2.1
 fig <- ggplot(recombo_window, aes(x=TreeDistPerRead.Act, y=WinSqDist_dn_minus_dS)) + 
   xlab("Normalized Window Ave WRF") + 
   ylab(expression(paste("Window Average ", Delta))) + 
@@ -105,7 +108,53 @@ fig <- ggplot(recombo_window, aes(x=TreeDistPerRead.Act, y=WinSqDist_dn_minus_dS
         legend.title=element_text(size=20))
 print(fig)
 
-ggsave(filename=paste0(THESIS_DIR, "/umberjack/error_v_recombo.png"), plot=fig)
+picname <- paste0(THESIS_DIR, "/umberjack/delta_v_recombo.png")
+if (file.exists(picname)) {
+  warning(paste0("Not replacing ", picname))
+} else {
+  ggsave(filename=picname, plot=fig, width=3, height=2.1, units="in")  
+} 
+
+
+#' Show effect of recombination alone on umberjack inaccuracy, highlighting effects of recombination rate
+#' 
+recombo_rate <- read.table('/home/thuy/gitrepo/Umberjack_Benchmark/sim_config/sim_args.recombo.tsv', header=TRUE, sep="\t")
+recombo_rate$rate <- recombo_rate$NumBreakpoints / (recombo_rate$CodonSites * recombo_rate$Generations)
+rate_str <- unique(recombo_rate$rate)
+rate_str <- rate_str[order(rate_str)]
+rate_str <- format((signif(rate_str, 2)), scientific=TRUE)
+recombo_rate$rateFactor <- factor(format(signif(recombo_rate$rate, 2), scientific=TRUE),
+                                  levels=rate_str)
+head(recombo_rate)
+summary(recombo_rate)
+dim(recombo_rate)
+recombo_window <- merge(x=recombo_window, 
+                        y=subset(recombo_rate, select=c(Name, rate, rateFactor)),
+                        by.x=c("File"), by.y=c("Name"),
+                        all.x=TRUE, all.y=FALSE)
+head(recombo_window)
+summary(recombo_window)
+dim(recombo_window)
+
+#+ fig.width=3, fig.height=2.1
+fig <- ggplot(recombo_window, aes(x=TreeDistPerRead.Act, y=WinSqDist_dn_minus_dS)) + 
+  xlab("Normalized Window WRF") + 
+  ylab(expression(paste("Window Average ", Delta))) + 
+  theme_bw(base_size=12) + 
+  geom_point(aes(color=rateFactor), alpha=0.7, size=2) +                      
+  geom_smooth(method="lm", se=FALSE, color="black", size=2) +          
+  scale_color_discrete(name="Recombination\nRate") + 
+  theme(axis.title=element_text(size=20), axis.text=element_text(size=20),
+        legend.title=element_text(size=20),
+        legend.text=element_text(size=16))
+print(fig)
+
+picname <- paste0(THESIS_DIR, "/umberjack/delta_v_recombo_showRate.png")
+if (file.exists(picname)) {
+  warning(paste0("Not replacing ", picname))
+} else {
+  ggsave(filename=picname, plot=fig, width=3, height=2.1, units="in")  
+} 
 
 
 
@@ -126,7 +175,7 @@ dim(window)
 summary(window)
 
 #' Plot the univariate regression plots, with outliers removed
-#+ fig.width=10, fig.height=7
+#+ fig.width=3, fig.height=2.1
 for (predictor in LM_COVAR_NAMES) {
   
   fig <- ggplot(dnds, aes_string(x=predictor, y="SqDist_dn_minus_dS")) + 
@@ -142,13 +191,18 @@ for (predictor in LM_COVAR_NAMES) {
           legend.title=element_text(size=20))
   print(fig)
   
-  #ggsave(filename=paste0(THESIS_DIR, "/umberjack/error_v_recombo.png"), plot=fig)
+  picname <- paste0(THESIS_DIR, "/umberjack/univar_blowup_delta_v_", predictor, ".png")
+  if (file.exists(picname)) {
+    warning(paste0("Not replacing ", picname))
+  } else {
+    ggsave(filename=picname, plot=fig, width=3, height=2.1, units="in")  
+  } 
 
 }
 
 
 #' Plot the univariate regression plots, with outliers intact
-#+ fig.width=10, fig.height=7
+#+ fig.width=3, fig.height=2.1
 for (predictor in LM_COVAR_NAMES) {
   
   fig <- ggplot(dnds, aes_string(x=predictor, y="SqDist_dn_minus_dS")) + 
@@ -164,7 +218,12 @@ for (predictor in LM_COVAR_NAMES) {
           legend.title=element_text(size=20))
   print(fig)
   
-  #ggsave(filename=paste0(THESIS_DIR, "/umberjack/error_v_recombo.png"), plot=fig)
+  picname <- paste0(THESIS_DIR, "/umberjack/univar_delta_v_", predictor, ".png")
+  if (file.exists(picname)) {
+    warning(paste0("Not replacing ", picname))
+  } else {
+    ggsave(filename=picname, plot=fig, width=3, height=2.1, units="in")  
+  } 
   
 }
 
