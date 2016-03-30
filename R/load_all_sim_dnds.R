@@ -68,7 +68,7 @@ COVAR_NAMES <- NUM_NAMES[!NUM_NAMES %in%
                              #"Window_UnambigCodonRate.Act",
                              # These are highly correlated with N, S
                              "Subst.Act", "Subst.Exp",
-                             "EN.Exp", "ES.Exp", "N.Exp", "S.Exp",
+                             "EN.Exp", "ES.Exp", "N.Exp", "S.Exp",                             
                              "Window_Start", "Window_End", "CodonSite", "Reads.Act", "PopSize.Act", "Is_Break",
                              "TreeLen.Act",
                              "TreeDist.Act",  #  too much overlap with TreeDistPerRead.Act
@@ -112,9 +112,9 @@ REAL_LM_COVAR_NAMES <- c("Reads.Act",
 
 nice <- function(name) {
   if (name == "IsLowSubst.Act") {
-    return ("Only Ambig Window Phylogney Subs")
+    return ("Only Ambig Window Phylogeny Subs")
   } else if (name == "BreakRatio.Act") {
-    return ("Metric of window breakpoints & \ncloseness to centre of window")
+    return ("Total Breakpoint Ratios in Window")
   } else if (name == "Window_Breaks") {
     return ("Recombination Breaks in Window")
   } else if (name == "Genome_Breaks") {
@@ -122,15 +122,15 @@ nice <- function(name) {
   } else if (name == "UnambigCodonRate.Act") {
     return ("Window-Site Unambiguous Codons Per Read")
   } else if (name == "AADepth.Act") {
-    return ("Window-Site Unambiguous AA Per Read")
+    return ("Window-Site Unambiguous AA Depth")
   } else if (name == "EntropyCodon.Act") {
     return ("Window-Site Codon Entropy")
   } else if (name == "UnknownPerCodon.Act") {
-    return ("Window-Site Unknown Bases Per Codon")
+    return ("Window-Site Unknown Bases Per Read")
   } else if (name == "ErrPerCodon.Act") {
-    return ("Window-Site Erroneously Sequenced Bases Per Codon")
+    return ("Window-Site Sequence Errors Per Read")
   } else if (name == "N.Act") {
-    return ("Window-Site Nonsyn subs")
+    return ("Window-Site Nonsyn Subs")
   } else if (name == "S.Act") {
     return ("Window-Site Syn subs")
   } else if (name == "TreeLen.Act") {
@@ -138,32 +138,35 @@ nice <- function(name) {
   } else if (name == "TreeDepth.Act") {
     return ("Window Tree Depth (Subs/Site)")
   } else if (name == "TreeDistPerRead.Act") {
-    return ("Ave Robinson Foulds (Window Tree, Expected Tree) \n Weighted By Genome Width Covered By Expected Tree\nNormalized by Total Reads")
+    return ("Window Weighted Robinson Foulds, Normalized by Total Reads")
   } else if (name == "TreeDist.Act") {
-    return ("Ave Robinson Foulds (Window Tree, Expected Tree) \n Weighted By Genome Width Covered By Expected Tree")
+    return ("Window Weighted Robinson Foulds")
   } else if (name == "EntropyCodon.Exp") {
-    return ("True Population Site Codon Entropy")
+    return ("True Site Codon Entropy")
   } else if (name == "WinP_SameCodonFreq.Act") {
-    return ("Window Ave log10 P(window codon distro matches full popn)")
+    return ("log10 P(Window-Site Codon Distro = True Site Codon Distro), Ave Across Window")
   } else if (name == "P_SameCodonFreq.Act") {
-    return ("log10 P(window codon distro matches full popn)")
+    return ("log10 P(Window-Site Codon Distro = True Site Codon Distro)")
   } else if (name == "ResolvedPerSub.Act ") {
     return ("Fraction of Substitutions from Ambiguous Codons")
-  }
-  else if (name == "N.Exp") {
-    return ("True Population Site Nonsyn Subs")
+  } else if (name == "EN.Act") {
+    return ("Window-Site Expected Nonsyn Subs Per Individual")
+  } else if (name == "ES.Act") {
+    return ("Window-Site Expected Syn Subs Per Individual")
+  } else if (name == "N.Exp") {
+    return ("True Site Nonsyn Subs")
   } else if (name == "S.Exp") {
-    return ("True Population Site Syn Subs")
+    return ("True Site Syn Subs")
   } else if (name == "Cov.Act") {
     return ("Window Read Coverage Per Individual")
   } else if (name == "Window_Entropy.Act") {
-    return ("Codon Entropy Ave Across Window")
+    return ("Window-Site Codon Entropy, Ave Across Window")
   } else if (name == "Window_UnambigCodonRate.Act") {
-    return ("Unambig Codons Per Read Ave Across Window")
+    return ("Window-Site Unambig Codons Per Read, Ave Across Window")
   } else if (name == "Window_ErrPerCodon.Act") {
-    return ("Erroneously Sequenced Bases Per Codon Ave Across Window")
+    return ("Window-Site Sequence Errors Per Read, Ave Across Window")
   } else if (name == "Window_Subst.Act") {
-    return ("Phylogeny-Site Substitutions Ave Across Window")
+    return ("Site Substitutions Ave Across Window")
   } else if (name == "LOD_dNdS") {
     return ("log2(inferred window site dn/ds) - log2(expected site dn/ds)")
   } else if (name == "Dist_dn_minus_dS") {
@@ -180,6 +183,10 @@ nice <- function(name) {
     return ("|(inferred window site dn-ds) - (expected site dn-ds)|\nAve Across Window")
   } else if (name == "WinSqDist_dn_minus_dS") {
     return ("[(inferred window site dn-ds) - (expected site dn-ds)] ^2\n Ave Across Window")
+  } else if (name == "TreeLenPerRead.Act") {
+    return ("Tree Length Normalized By Reads")
+  } else if (name == "PolytomyPerRead.Act") {
+    return ("Total Polytomies Normalized by Reads")
   } else {
     return (name)
   }

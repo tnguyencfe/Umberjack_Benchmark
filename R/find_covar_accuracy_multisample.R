@@ -17,6 +17,7 @@ library(plyr)
 library(MASS)  # stepAIC
 #library(gplots)
 library(RColorBrewer)
+library(energy)  # dcor()
 #library(nortest)
 #library(devtools)
 #library(ggbiplot)
@@ -394,18 +395,33 @@ for (predictor in LM_COVAR_NAMES) {
   plot(onefit)
 }
 
+#' Find the spearman's correlation, distance correlation between individual predictor and the response
+#' 
+univar_rank <- data.frame(predictor=as.character(LM_COVAR_NAMES))
+univar_rank$spear_cor <- sapply(univar_rank$predictor,
+                                function(predictor) {
+                                  print(predictor)
+                                  cor(cleandnds$SqDist_dn_minus_dS, cleandnds[, predictor], method="spearman", use="complete.obs")
+                                  })
+
+# univar_rank$dcor <- sapply(as.character(univar_rank$predictor),
+#                                 function(predictor) {
+#                                   print(predictor)
+#                                   dcor(cleandnds$SqDist_dn_minus_dS, cleandnds[, predictor])
+#                                 })
+
 #' Individual predictors Gaussian.  These have large deviance than Gamma. Don't use.
 #' 
-for (predictor in LM_COVAR_NAMES) {
-  
-  oneform <- as.formula(paste0("SqDist_dn_minus_dS ~ ", predictor))
-  print(oneform)
-  
-  onefit <- glm(oneform, data=cleandnds, family=gaussian, 
-                start=rep(1, 2))
-  print(summary(onefit))
-  plot(onefit)
-}
+# for (predictor in LM_COVAR_NAMES) {
+#   
+#   oneform <- as.formula(paste0("SqDist_dn_minus_dS ~ ", predictor))
+#   print(oneform)
+#   
+#   onefit <- glm(oneform, data=cleandnds, family=gaussian, 
+#                 start=rep(1, 2))
+#   print(summary(onefit))
+#   plot(onefit)
+# }
 
 #library(biglm)
 #bigglm(formula, data, family=gaussian(),...)
