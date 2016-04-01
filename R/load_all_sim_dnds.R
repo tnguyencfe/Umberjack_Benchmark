@@ -27,6 +27,7 @@ NUM_NAMES <- c("Window_Start",
                "EntropyCodon.Act",
                "UnknownPerCodon.Act",
                "ErrPerCodon.Act",
+               "Subst.Act",
                "N.Act",
                "S.Act",
                "EN.Act",
@@ -35,7 +36,7 @@ NUM_NAMES <- c("Window_Start",
                "dN_minus_dS.Act",
                "TreeLen.Act",
                "TreeLenPerRead.Act",
-               "TreeDepth.Act",
+               #"TreeDepth.Act",
                "TreeDist.Act",
                "TreeDistPerRead.Act",
                "Polytomy.Act",
@@ -67,7 +68,8 @@ COVAR_NAMES <- NUM_NAMES[!NUM_NAMES %in%
                              #"UnambigCodonRate.Act", 
                              #"Window_UnambigCodonRate.Act",
                              # These are highly correlated with N, S
-                             "Subst.Act", "Subst.Exp",
+                             #"Subst.Act", 
+                             "Subst.Exp",
                              "EN.Exp", "ES.Exp", "N.Exp", "S.Exp",                             
                              "Window_Start", "Window_End", "CodonSite", "Reads.Act", "PopSize.Act", "Is_Break",
                              "TreeLen.Act",
@@ -113,32 +115,34 @@ REAL_LM_COVAR_NAMES <- c("Reads.Act",
 nice <- function(name) {
   if (name == "IsLowSubst.Act") {
     return ("Only Ambig Window Phylogeny Subs")
+  } else if (name == "Subst.Act") {
+    return ("Window-Site Subs")
   } else if (name == "BreakRatio.Act") {
-    return ("Total Breakpoint Ratios in Window")
+    return ("Total Breakpoint Ratio")
   } else if (name == "Window_Breaks") {
     return ("Recombination Breaks in Window")
   } else if (name == "Genome_Breaks") {
     return ("Recombination Breaks in Genome")
   } else if (name == "UnambigCodonRate.Act") {
-    return ("Window-Site Unambiguous Codons Per Read")
+    return ("Unambig Codon Rate")
   } else if (name == "AADepth.Act") {
-    return ("Window-Site Unambiguous AA Depth")
+    return ("Unambig AA Depth")
   } else if (name == "EntropyCodon.Act") {
     return ("Window-Site Codon Entropy")
   } else if (name == "UnknownPerCodon.Act") {
     return ("Window-Site Unknown Bases Per Read")
   } else if (name == "ErrPerCodon.Act") {
-    return ("Window-Site Sequence Errors Per Read")
+    return ("Sequence Err/Read")
   } else if (name == "N.Act") {
-    return ("Window-Site Nonsyn Subs")
+    return ("Nonsyn Subs")
   } else if (name == "S.Act") {
-    return ("Window-Site Syn subs")
+    return ("Syn Subs")
   } else if (name == "TreeLen.Act") {
-    return ("Window Tree Length (Subs/Site)")
+    return ("Window Tree Length")
   } else if (name == "TreeDepth.Act") {
     return ("Window Tree Depth (Subs/Site)")
   } else if (name == "TreeDistPerRead.Act") {
-    return ("Window Weighted Robinson Foulds, Normalized by Total Reads")
+    return ("Ave WRF/Reads")
   } else if (name == "TreeDist.Act") {
     return ("Window Weighted Robinson Foulds")
   } else if (name == "EntropyCodon.Exp") {
@@ -146,13 +150,13 @@ nice <- function(name) {
   } else if (name == "WinP_SameCodonFreq.Act") {
     return ("log10 P(Window-Site Codon Distro = True Site Codon Distro), Ave Across Window")
   } else if (name == "P_SameCodonFreq.Act") {
-    return ("log10 P(Window-Site Codon Distro = True Site Codon Distro)")
+    return ("log10 P")
   } else if (name == "ResolvedPerSub.Act ") {
     return ("Fraction of Substitutions from Ambiguous Codons")
   } else if (name == "EN.Act") {
-    return ("Window-Site Expected Nonsyn Subs Per Individual")
+    return ("E[Nonsyn]/Branch")
   } else if (name == "ES.Act") {
-    return ("Window-Site Expected Syn Subs Per Individual")
+    return ("E[Syn]/Branch")
   } else if (name == "N.Exp") {
     return ("True Site Nonsyn Subs")
   } else if (name == "S.Exp") {
@@ -184,9 +188,9 @@ nice <- function(name) {
   } else if (name == "WinSqDist_dn_minus_dS") {
     return ("[(inferred window site dn-ds) - (expected site dn-ds)] ^2\n Ave Across Window")
   } else if (name == "TreeLenPerRead.Act") {
-    return ("Tree Length Normalized By Reads")
+    return ("Tree Length/Reads")
   } else if (name == "PolytomyPerRead.Act") {
-    return ("Total Polytomies Normalized by Reads")
+    return ("Polytomies/Reads")
   } else {
     return (name)
   }

@@ -146,12 +146,14 @@ dim(gooddnds)
 
 concord <- epi.ccc(gooddnds[!is.na(gooddnds$dNdS.Act) & !is.na(gooddnds$dNdS.Exp), ]$dNdS.Act, 
                    gooddnds[!is.na(gooddnds$dNdS.Act) & !is.na(gooddnds$dNdS.Exp), ]$dNdS.Exp)
+print(concord$rho.c)
 print(concord$rho.c$est)
 #' **Concordance for dN/dS when only good window-sites considered = `r concord$rho.c$est`**
 #' 
 
 concord <- epi.ccc(gooddnds[!is.na(gooddnds$dN_minus_dS.Act) & !is.na(gooddnds$dN_minus_dS.Exp), ]$dN_minus_dS.Act, 
                    gooddnds[!is.na(gooddnds$dN_minus_dS.Act) & !is.na(gooddnds$dN_minus_dS.Exp), ]$dN_minus_dS.Exp)
+print(concord$rho.c)
 print(concord$rho.c$est)
 #' **Concordance for dN-dS when only good window-sites considered = `r concord$rho.c$est`**
 #' 
@@ -267,11 +269,63 @@ print(fig)
 #' =========================================
 #' 
 
-# Expects continuous response for speedglm
+# Expects speedglm fit
 fit_and_plot_glm_fast <- function(resp_colname, fit, df) {
   
-  #bestfit <- stepAIC(fit, direction="both", trace=FALSE)
-  #bestfit <- mystepAIC(fit, direction="both", trace=FALSE, use.start=TRUE)
+  bestfit <- stepAIC(fit, direction="both", trace=1)
+  
+  print(summary(bestfit))
+  
+  # speedglm doesn't expose residuals or fitted values. Do it ourselves
+  # speedglm doesn't expose residuals or fitted values. Do it ourselves
+  df_fit <- data.frame(Intercept=1, df[, attributes(bestfit$terms)$term.labels])
+  
+  # TODO:  hack - this is temp hack to get factors to be numeric
+  if (length(grep("IsLowSubst.Act", colnames(df_fit)) > 0)){
+    df_fit$IsLowSubst.Act <- ifelse (df_fit$IsLowSubst.Act == TRUE, 1, 0)  
+  }
+  #fitted.values <- predict(bestfit)
+  if (!"residuals" %in% names(bestfit)) {
+    df_fit$fitted.values <- as.vector(as.matrix(df_fit) %*% coef(bestfit))
+    df_fit[, resp_colname] <-  df[, resp_colname]    
+    df_fit$residuals <-  df_fit[, resp_colname] - df_fit$fitted.values  
+  } else {
+    df_fit$fitted.values <- bestfit$fitted.values
+    df_fit[, resp_colname] <-  df[, resp_colname]    
+    df_fit$residuals <-  bestfit$residuals  
+  }
+  
+  fig <- ggplot(df_fit, aes(x=fitted.values, y=residuals)) + 
+    geom_point(alpha=0.5, shape=1) + 
+    geom_smooth(method="loess", color="Red") +
+    xlab("\nPredicted Values") + 
+    ylab("Residuals\n") + 
+    ggtitle("Predicted vs Residuals")
+  print(fig)
+  
+  # residual normality
+  qqnorm(df_fit$residuals)
+  qqline(df_fit$residuals)
+  
+  # Print R-square values
+  r2 <- rSquared(y=df_fit$fitted.values, resid=df_fit$residuals)
+  print (paste0("rsqured = ", r2))
+  
+  coeffs <- data.frame(summary(bestfit)$coefficients)
+  colnames(coeffs)[grep("Pr", colnames(coeffs))] <- "pval"
+  coeffs$pval <- as.numeric(as.character(coeffs$pval))
+  coeffs$adj.pval <- p.adjust(coeffs$pval, method="BH")
+  coeffs$name <- rownames(coeffs)
+  print(coeffs)
+  
+  
+  predictors <-  attributes(bestfit$terms)$term.labels
+  return (bestfit)
+}
+
+# Expects continuous response for Gamma GLM
+fit_and_plot_glm_fast_gamma <- function(resp_colname, fit, df) {
+  
   bestfit <- mystepAIC(fit, direction="backward", trace=TRUE, use.start=TRUE)
   
   print(summary(bestfit))
@@ -306,6 +360,11 @@ fit_and_plot_glm_fast <- function(resp_colname, fit, df) {
   qqnorm(df_fit$residuals)
   qqline(df_fit$residuals)
   
+  # Print R-square values
+  r2 <- rSquared(y=df_fit$fitted.values, resid=df_fit$residuals)
+  print (paste0("rsqured = ", r2))
+  
+  
   coeffs <- data.frame(summary(bestfit)$coefficients)
   colnames(coeffs)[grep("Pr", colnames(coeffs))] <- "pval"
   coeffs$pval <- as.numeric(as.character(coeffs$pval))
@@ -315,18 +374,6 @@ fit_and_plot_glm_fast <- function(resp_colname, fit, df) {
   
   
   predictors <-  attributes(bestfit$terms)$term.labels
-#   
-#   figs <- sapply(predictors, 
-#                  function(varname) {
-#                    fig <- ggplot(df_fit, aes_string(x=varname, y="residuals")) + 
-#                      geom_point(alpha=0.5, shape=1) + 
-#                      geom_smooth(method="lm", color="Red") + 
-#                      xlab(nice(varname)) + 
-#                      ylab("Residuals\n") + 
-#                      ggtitle(paste0("Residuals vs covariate"))
-#                    print(fig)
-#                  })
-  
   return (bestfit)
 }
 
@@ -349,6 +396,15 @@ if (!"ResolvedPerSub.Act" %in% colnames(dnds) |  sum(cleandnds$ResolvedPerSub.Ac
 
 DistFormula <- as.formula(paste0("SqDist_dn_minus_dS~", paste0(LM_COVAR_NAMES, collapse=" + ")))
 print(DistFormula)
+
+#' Gaussian Fit, Backwards Feature Selection
+#' 
+allfitDist <- speedglm(DistFormula, data=cleandnds, family=gaussian(), fitted=TRUE)
+bestfit <- fit_and_plot_glm_fast("SqDist_dn_minus_dS", allfitDist, df=cleandnds)
+
+
+
+#' Gamma fit, speedglm:  this will fail
 allfitDist <- speedglm(DistFormula, data=cleandnds, family=Gamma()
                        #start=rep(1, length(LM_COVAR_NAMES) + 1)
                        )
@@ -356,15 +412,16 @@ allfitDist <- speedglm(DistFormula, data=cleandnds, family=Gamma()
 # allfitDist <- glm(DistFormula, data=cleandnds,
 #                        start=rep(1, length(LM_COVAR_NAMES) + 1))
 
-bestfit <- fit_and_plot_glm_fast("SqDist_dn_minus_dS", allfitDist, df=cleandnds)
-plot(allfitDist)
-plot(bestfit)
-r2 <- rSquared(y=bestfit$y, resid=bestfit$residuals)
-print (paste0("rsqured = ", r2))
+bestfit <- fit_and_plot_glm_fast_gamma("SqDist_dn_minus_dS", allfitDist, df=cleandnds)
+#plot(allfitDist)
+#plot(bestfit)
+#r2 <- rSquared(y=bestfit$y, resid=bestfit$residuals)
+#print (paste0("rsqured = ", r2))
 
 
+#' Gamma, normal GLM.  This will fail too.
 cleandnds$GammaSqDist_dn_minus_dS <- cleandnds$SqDist_dn_minus_dS
-cleandnds$GammaSqDist_dn_minus_dS[cleandnds$GammaSqDist_dn_minus_dS == 0] <- 1e-4
+cleandnds$GammaSqDist_dn_minus_dS[cleandnds$GammaSqDist_dn_minus_dS == 0] <- 1e-13
 summary(cleandnds)
 gammaDistFormula <- as.formula(paste0("GammaSqDist_dn_minus_dS ~", paste0(LM_COVAR_NAMES, collapse=" + ")))
 print(gammaDistFormula)
@@ -377,38 +434,44 @@ print(summary(allfitDist))
 plot(allfitDist)
 
 bestfit <- fit_and_plot_glm_fast("GammaSqDist_dn_minus_dS", allfitDist, df=cleandnds)
-plot(bestfit)
-r2 <- rSquared(y=bestfit$y, resid=bestfit$residuals)
-print (paste0("rsqured = ", r2))
+#plot(bestfit)
+#r2 <- rSquared(y=bestfit$y, resid=bestfit$residuals)
+#print (paste0("rsqured = ", r2))
 
 
 #' Individual predictors
 #' 
-for (predictor in LM_COVAR_NAMES) {
-  
-  oneform <- as.formula(paste0("GammaSqDist_dn_minus_dS ~ ", predictor))
-  print(oneform)
-  
-  onefit <- glm(oneform, data=cleandnds, family=Gamma(), 
-                start=rep(1, 2))
-  print(summary(onefit))
-  plot(onefit)
-}
+# for (predictor in LM_COVAR_NAMES) {
+#   
+#   oneform <- as.formula(paste0("GammaSqDist_dn_minus_dS ~ ", predictor))
+#   print(oneform)
+#   
+#   onefit <- glm(oneform, data=cleandnds, family=Gamma(), 
+#                 start=rep(1, 2))
+#   print(summary(onefit))
+#   plot(onefit)
+# }
 
 #' Find the spearman's correlation, distance correlation between individual predictor and the response
 #' 
 univar_rank <- data.frame(predictor=as.character(LM_COVAR_NAMES))
-univar_rank$spear_cor <- sapply(univar_rank$predictor,
+univar_rank$spear_cor <- sapply(as.character(univar_rank$predictor),
                                 function(predictor) {
                                   print(predictor)
                                   cor(cleandnds$SqDist_dn_minus_dS, cleandnds[, predictor], method="spearman", use="complete.obs")
-                                  })
+                                })
+univar_rank$abs_spear_cor <- abs(univar_rank$spear_cor)
+univar_rank <- univar_rank[order(-univar_rank$abs_spear_cor), ]
 
-# univar_rank$dcor <- sapply(as.character(univar_rank$predictor),
-#                                 function(predictor) {
-#                                   print(predictor)
-#                                   dcor(cleandnds$SqDist_dn_minus_dS, cleandnds[, predictor])
-#                                 })
+#+ results="asis"
+kable(univar_rank, format="html", caption="spearman corr univarate ranking")
+
+# Don't do this, will crash due to excessive memory usage if >5000 datapoints
+# for (predictor in LM_COVAR_NAMES) {
+#   pred_dcor <- dcor(cleandnds$SqDist_dn_minus_dS, cleandnds[, predictor])
+#   print(paste0(predictor, " dcor =", pred_dcor))
+# }
+
 
 #' Individual predictors Gaussian.  These have large deviance than Gamma. Don't use.
 #' 
