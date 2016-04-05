@@ -75,7 +75,12 @@ COVAR_NAMES <- NUM_NAMES[!NUM_NAMES %in%
                              "TreeLen.Act",
                              "TreeDist.Act",  #  too much overlap with TreeDistPerRead.Act
                              "Polytomy.Act",
-                             "UnknownPerCodon.Act"
+                             "UnknownPerCodon.Act",
+                             "Window_Breaks",
+                             "Window_Entropy.Act",
+                             "Window_UnambigCodonRate.Act",
+                             "Window_ErrPerCodon.Act",
+                             "Window_Subst.Act"
                            )
                          ]
 

@@ -29,6 +29,8 @@ library(RColorBrewer)
 #source ('./speedStepAIC.R')
 library(xtable)
 source('./load_all_sim_dnds.R')
+source("plot_helper.R")
+
 THESIS_DIR <- '../../MutationPatterns/tex'
 
 
@@ -112,7 +114,7 @@ latex_nice <-  function(name) {
 
 
 # Per Window-Site data
-dnds_filename <- "/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/collate_all.recombo.csv"
+dnds_filename <- "../simulations/out/collate_all.recombo.csv"
 if (exists("dnds_filename")) {
   recombo_dnds <- get_all_sim_dnds(dnds_filename)  
 } else {
@@ -148,13 +150,6 @@ dim(recombo_window)
 summary(recombo_window)
 
 
-# This removes outliers so that we can visualize the majority of points 
-outlier_range <- function(x) {
-  qnt <- quantile(x, probs=c(.25, .75), na.rm = TRUE, names=FALSE)
-  fudge <- 1.5 * IQR(x, na.rm = TRUE)
-  return (c(lower=max(qnt[1] - fudge, min(x, na.rm=TRUE)), 
-            upper=min(qnt[2] + fudge, max(x, na.rm=TRUE))))
-}
 
 
 
@@ -372,7 +367,7 @@ if (file.exists(picname)) {
 
 ###############  ALL SIMULATED DATA FOR RANDOM FOREST
 
-dnds_filename <- "/home/thuy/gitrepo/Umberjack_Benchmark/simulations/out/collate_all.treedist.csv"
+dnds_filename <- "../simulations/out/collate_all.treedist.csv"
 if (exists("dnds_filename")) {
   dnds <- get_all_sim_dnds(dnds_filename)  
 } else {
@@ -470,7 +465,7 @@ if (file.exists(filename)) {
 
 
 #' Print out variable importance table for accuracy random forest
-imp <- read.table("/home/thuy/gitrepo/Umberjack_Benchmark/R/lhs_regression_fix/importance.csv", sep=",", header=TRUE)
+imp <- read.table("./lhs_regression_fix/importance.csv", sep=",", header=TRUE)
 head(imp)
 summary(imp)
 dim(imp)
