@@ -563,6 +563,8 @@ do_predict_cont <- function(dnds_filename=NULL, folds=5, trees_per_rf=501, cores
   rfe_cont_results <- rf_feat_sel_cont_rfe(dnds=dnds, respname="SqDist_dn_minus_dS", feats=feats, 
                                            folds=folds, trees_per_rf=trees_per_rf, cores_per_rf=cores_per_rf)
   
+  save(rfe_cont_results, file="rfe_cont_results.RData")
+  
   print(paste0("Mem Bytes after RF=", mem_used()))
   
   # Get the predictions for all of the simulation data  
