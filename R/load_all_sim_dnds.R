@@ -80,7 +80,8 @@ COVAR_NAMES <- NUM_NAMES[!NUM_NAMES %in%
                              "Window_Entropy.Act",
                              "Window_UnambigCodonRate.Act",
                              "Window_ErrPerCodon.Act",
-                             "Window_Subst.Act"
+                             "Window_Subst.Act",
+                             "ResolvedPerSub.Act"  # No more resolved subs
                            )
                          ]
 
