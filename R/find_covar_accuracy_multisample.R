@@ -255,14 +255,14 @@ bestfit <- fit_and_plot_glm_fast("SqDist_dn_minus_dS", allfitDist, df=cleandnds)
 dim(cleandnds[cleandnds$SqDist_dn_minus_dS == 0, ])
 dim(cleandnds)
 
-#' Fraction of datapoints in which response = 0 = `r dim(cleandnds[cleandnds$SqDist_dn_minus_dS == 0, ])` /  `r dim(cleandnds) ` = 
-#' `r dim(cleandnds[cleandnds$SqDist_dn_minus_dS == 0, ]) /   dim(cleandnds) `
+#' Fraction of datapoints in which response = 0 = `r nrow(cleandnds[cleandnds$SqDist_dn_minus_dS == 0, ])` /  `r nrow(cleandnds) ` = 
+#' `r nrow(cleandnds[cleandnds$SqDist_dn_minus_dS == 0, ]) /   nrow(cleandnds) `
 #' 
 cleandnds$GammaSqDist_dn_minus_dS <- cleandnds$SqDist_dn_minus_dS
 cleandnds$GammaSqDist_dn_minus_dS[cleandnds$GammaSqDist_dn_minus_dS == 0] <- 1e-13
 summary(cleandnds)
 
-#' Gamma, normal GLM.  This will fail too.  
+#' Gamma GLM.  This will fail too.  
 #' 
 gammaDistFormula <- as.formula(paste0("GammaSqDist_dn_minus_dS ~", paste0(LM_COVAR_NAMES, collapse=" + ")))
 print(gammaDistFormula)
@@ -273,7 +273,7 @@ allfitDist <- glm(gammaDistFormula, data=cleandnds, family=Gamma(),
 print(summary(allfitDist))
 plot(allfitDist)
 
-bestfit <- fit_and_plot_glm_fast("GammaSqDist_dn_minus_dS", allfitDist, df=cleandnds)
+bestfit <- fit_and_plot_glm_fast_gamma("GammaSqDist_dn_minus_dS", allfitDist, df=cleandnds)
 
 
 
