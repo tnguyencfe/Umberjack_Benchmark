@@ -70,9 +70,9 @@ latex_nice <-  function(name) {
   } else if (name == "ResolvedPerSub.Act ") {
     return ("Fraction of Substitutions from Ambiguous Codons")
   } else if (name == "EN.Act") {
-    return ("Window-Site Expected Nonsynonymous Substitutions Per Branch")
+    return ("Normalized Window-Site Expected Nonsynonymous Substitutions")
   } else if (name == "ES.Act") {
-    return ("Window-Site Expected Synonymous Substitutions Per Branch")
+    return ("Normalized Window-Site Expected Synonymous Substitutions")
   } else if (name == "N.Exp") {
     return ("True Site Nonsyn Subs")
   } else if (name == "S.Exp") {
@@ -384,13 +384,18 @@ summary(window)
 #' Plot the univariate regression plots, with outliers removed
 #+ fig.width=2.5, fig.height=2.5
 dndsrange <- outlier_range(dnds$SqDist_dn_minus_dS)
+load("./lhs_regression_fix/allfitDist_gamma_glm.RData")
+
+
 for (predictor in LM_COVAR_NAMES) {
   fig <- ggplot(dnds, aes_string(x=predictor, y="SqDist_dn_minus_dS")) + 
     xlab(nice(predictor)) + 
     ylab(expression(Delta)) + 
     theme_bw(base_size=12) + 
     geom_point(alpha=0.1, shape=1) +                               
-    geom_smooth(method="lm", se=FALSE, color="blue") +                      
+    #geom_smooth(method="lm", se=FALSE, color="blue") +                      
+    #geom_abline(intercept=allfitDist$coeff["(Intercept)"],
+    #            slope=allfitDist$coeff[predictor], color="blue") + 
     scale_y_continuous(limits=dndsrange)
     #scale_colour_gradient2(name="Tree\nLength", low="blue", mid="darkgrey", high="red", 
     #                       midpoint=quantile(recombo_window$TreeLen.Act, probs=0.5, na.rm=TRUE)) + 
@@ -439,28 +444,32 @@ for (predictor in LM_COVAR_NAMES) {
 #' Find the spearman's correlation, distance correlation between individual predictor and the response
 #' 
 univar_rank <- data.frame(predictor=as.character(LM_COVAR_NAMES))
-univar_rank$spear_cor <- sapply(as.character(univar_rank$predictor),
-                                function(predictor) {
-                                  print(predictor)
-                                  cor(dnds$SqDist_dn_minus_dS, dnds[, predictor], method="spearman", use="complete.obs")
-                                })
+univar_rank <- adply(.data=univar_rank,
+                     .margins=1,
+                     .fun=function(row) {
+                       predictor <- as.character(row$predictor)
+                       result <- cor.test(dnds$SqDist_dn_minus_dS, 
+                                          dnds[, predictor], method="spearman", na.action=na.exclude, exact=FALSE)
+                       return (data.frame(spear_cor=result$estimate, p.value=result$p.value))
+                     })
 univar_rank$abs_spear_cor <- abs(univar_rank$spear_cor)
 univar_rank <- univar_rank[order(-univar_rank$abs_spear_cor), ]
 univar_rank$latex_name <- sapply(as.character(univar_rank$predictor), latex_nice)
 
-cols <- c("latex_name", "spear_cor")
-nice_cols <- c("Feature", "Corr")
+cols <- c("latex_name", "spear_cor", "p.value")
+nice_cols <- c("Feature", "Corr", "P-value")
 tab <- xtable(univar_rank[, cols]
        , caption="Spearman Correlation Between Feature and $\\Delta$"
        , label="tab:univar_corr_delta"
-       , align=c("c", "l|", "c")
-       , format=c("s", "e"))
+       , align=c("c", "l|", "c|", "c")
+       , display=c("s", "e", "e", "e")
+       , digits=2)
 names(tab) <- nice_cols
 filename <- paste0(THESIS_DIR, "/umberjack/univar_corr_delta.tex")
 if (file.exists(filename)) {
   warning(paste0("Not regenerating", filename))
 } else {
-  write(print(tab, include.rownames=FALSE, sanitize.text.function), file=filename)  
+  write(print(tab, include.rownames=FALSE, sanitize.text.function=identity), file=filename)  
 }
 
 

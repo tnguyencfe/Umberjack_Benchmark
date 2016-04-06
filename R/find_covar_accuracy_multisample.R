@@ -47,15 +47,35 @@ window <-  get_window_sim_dnds(dnds=dnds)
 dim(window)
 summary(window)
 
-cleandnds <- na.omit(dnds)
-summary(cleandnds)
-dim(cleandnds)
-
 # hack for backwards compatibility when we didn't auto remove resolved codons from Umberjack
 # Or there are no resolved substitutions, then don't bother using it in the GLM
 if (!"ResolvedPerSub.Act" %in% colnames(dnds) |  sum(cleandnds$ResolvedPerSub.Act > 0, na.rm=TRUE) == 0) {
   LM_COVAR_NAMES <-  LM_COVAR_NAMES[!LM_COVAR_NAMES %in% c("ResolvedPerSub.Act" )]  
 }
+
+
+#cleandnds <- na.omit(dnds)
+respname <- "SqDist_dn_minus_dS"
+feats <- LM_COVAR_NAMES
+ids <- c("File", "Window_Start", "Window_End", "CodonSite")
+cleandnds <- na.omit(dnds[, c(respname, feats, ids)])
+summary(cleandnds)
+dim(cleandnds)
+dim(unique(cleandnds[, c("File", "CodonSite")]))
+
+#' In order to use Gamma family, the response must be in (0, inf).  That is, response can not be zero.  
+#  We decided not to use tweedie or zero-inflated gamma response because there aren't enough datapoints where response = 0 to make a difference.
+dim(cleandnds[cleandnds$SqDist_dn_minus_dS == 0, ])
+dim(cleandnds)
+
+#' Fraction of datapoints in which response = 0 = `r nrow(cleandnds[cleandnds$SqDist_dn_minus_dS == 0, ])` /  `r nrow(cleandnds) ` = 
+#' `r nrow(cleandnds[cleandnds$SqDist_dn_minus_dS == 0, ]) /   nrow(cleandnds) `
+#' 
+cleandnds$GammaSqDist_dn_minus_dS <- cleandnds$SqDist_dn_minus_dS
+cleandnds$GammaSqDist_dn_minus_dS[cleandnds$GammaSqDist_dn_minus_dS == 0] <- 1e-13
+summary(cleandnds)
+
+
 
 
 
@@ -91,14 +111,18 @@ for (predictor in LM_COVAR_NAMES) {
 #' Find the spearman's correlation, distance correlation between individual predictor and the response
 #' 
 univar_rank <- data.frame(predictor=as.character(LM_COVAR_NAMES))
-univar_rank$spear_cor <- sapply(as.character(univar_rank$predictor),
-                                function(predictor) {
-                                  print(predictor)
-                                  cor(cleandnds$SqDist_dn_minus_dS, cleandnds[, predictor], method="spearman", use="complete.obs")
-                                })
+univar_rank <- adply(.data=univar_rank,
+                     .margins=1,
+                     .fun=function(row) {
+                       predictor <- as.character(row$predictor)
+                       result <- cor.test(cleandnds$SqDist_dn_minus_dS, 
+                                cleandnds[, predictor], method="spearman", na.action=na.exclude, exact=FALSE)
+                       return (data.frame(spear_cor=result$estimate, p.value=result$p.value))
+                     })
 univar_rank$abs_spear_cor <- abs(univar_rank$spear_cor)
 univar_rank <- univar_rank[order(-univar_rank$abs_spear_cor), ]
 
+# 
 #+ results="asis"
 kable(univar_rank, format="html", caption="spearman corr univarate ranking")
 
@@ -250,17 +274,6 @@ bestfit <- fit_and_plot_glm_fast("SqDist_dn_minus_dS", allfitDist, df=cleandnds)
 # bestfit <- fit_and_plot_glm_fast_gamma("SqDist_dn_minus_dS", allfitDist, df=cleandnds)
 
 
-#' In order to use Gamma family, the response must be in (0, inf).  That is, response can not be zero.  
-#  We decided not to use tweedie or zero-inflated gamma response because there aren't enough datapoints where response = 0 to make a difference.
-dim(cleandnds[cleandnds$SqDist_dn_minus_dS == 0, ])
-dim(cleandnds)
-
-#' Fraction of datapoints in which response = 0 = `r nrow(cleandnds[cleandnds$SqDist_dn_minus_dS == 0, ])` /  `r nrow(cleandnds) ` = 
-#' `r nrow(cleandnds[cleandnds$SqDist_dn_minus_dS == 0, ]) /   nrow(cleandnds) `
-#' 
-cleandnds$GammaSqDist_dn_minus_dS <- cleandnds$SqDist_dn_minus_dS
-cleandnds$GammaSqDist_dn_minus_dS[cleandnds$GammaSqDist_dn_minus_dS == 0] <- 1e-13
-summary(cleandnds)
 
 #' Gamma GLM.  This will fail too.  
 #' 
@@ -272,6 +285,7 @@ allfitDist <- glm(gammaDistFormula, data=cleandnds, family=Gamma(),
 
 print(summary(allfitDist))
 plot(allfitDist)
+save(allfitDist, file="./lhs_regression_fix/allfitDist_gamma_glm.RData")
 
 bestfit <- fit_and_plot_glm_fast_gamma("GammaSqDist_dn_minus_dS", allfitDist, df=cleandnds)
 

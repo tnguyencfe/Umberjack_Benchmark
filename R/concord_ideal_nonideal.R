@@ -71,6 +71,9 @@ ave_readq <- mean(ideal$MinQual)
 #' 
 
 
+
+#'  We can really associate the entire dataset with concordance, because the tree lengths were randomly assigned.
+
 # Plot ideal vs nonideal concordance
 source("load_all_sim_dnds.R")
 source("plot_helper.R")
@@ -91,6 +94,41 @@ summary(dnds)
 head(dnds)
 dim(dnds)
 
+#' Calculate concordance 95percent CI for ideal datasets
+#' 
+summary(dnds[dnds$Is_Ideal == TRUE,])
+head(dnds[dnds$Is_Ideal == TRUE,])
+dim(dnds[dnds$Is_Ideal == TRUE,])
+concord <- epi.ccc(dnds$dN_minus_dS.Act[dnds$Is_Ideal == TRUE], dnds$dN_minus_dS.Exp[dnds$Is_Ideal == TRUE])
+print(concord$rho.c)
+
+#' Predetermine ideal dnds
+preideal <- merge(x=dnds, 
+                  y=subset(sims, select=c(Name, Generations, FragLenAve, Cover, NumBreakpoints)),
+                  by.x="File", by.y="Name")
+partition_ave_treelen <- read.table("/home/thuy/gitrepo/Umberjack_Benchmark/simulations/data/collate_treelen_partition.csv", sep=",", header=TRUE)
+summary(partition_ave_treelen)
+head(partition_ave_treelen)
+dim(partition_ave_treelen)
+
+preideal <- merge(x=preideal, y=partition_ave_treelen,
+                  by.x="File", by.y="Name")
+
+#' What is the actual average branch length of all the trees that had concordance > 0.8?
+#' 
+summary(preideal[preideal$Is_Ideal == TRUE, ])
+summary(preideal$AveTreeLen[preideal$Is_Ideal == TRUE]/1999)
+
+preideal$Is_PreIdeal <- preideal$FragLenAve >= 300 & preideal$Cover >= 2 & preideal$TreeDepth.Act/preideal$Reads.Act >= (1e-4 * 5 * 365/1000)
+summary(preideal)
+head(preideal)
+dim(preideal)
+
+summary(preideal[preideal$Is_PreIdeal == TRUE,])
+head(preideal[preideal$Is_PreIdeal == TRUE,])
+dim(preideal[preideal$Is_PreIdeal == TRUE,])
+concord <- epi.ccc(preideal$dN_minus_dS.Act[preideal$Is_PreIdeal == TRUE], preideal$dN_minus_dS.Exp[preideal$Is_PreIdeal == TRUE])
+print(concord$rho.c)
 
 
 ## [1] "Using Training Data 
@@ -220,3 +258,42 @@ xtable(importnonreal,
        display=c("s", "s", "g", "E"), 
        digits=10,
        caption="Importance of Feature on Prediction of Umberjack Error.", type="latex")
+
+
+
+#' train random Forest
+#' 
+#cleandnds <- na.omit(dnds)
+respname <- "SqDist_dn_minus_dS"
+feats <- LM_COVAR_NAMES
+ids <- c("File", "Window_Start", "Window_End", "CodonSite")
+cleandnds <- na.omit(dnds[, c(respname, feats, ids)])
+summary(cleandnds)
+dim(cleandnds)
+
+keep_feats <- c("UnambigCodonRate.Act",
+                "AADepth.Act",
+                "EntropyCodon.Act",
+                "ErrPerCodon.Act",
+                "Subst.Act",
+                "N.Act",
+                "S.Act" ,
+                "ES.Act",
+                "TreeLenPerRead.Act",
+                "TreeDistPerRead.Act",
+                "P_SameCodonFreq.Act",
+                "EntropyCodon.Exp")
+
+ptm <- proc.time()
+final_rf <- randomForest(x=cleandnds[, keep_feats], y=cleandnds[, respname],
+             replace=TRUE,
+             keep.inbag=TRUE, 
+             importance=TRUE, 
+             keep.forest=TRUE)
+print (proc.time() - ptm)
+save(final_rf, file="./lhs_regression_fix/final_rf.RData")
+print(final_rf)
+
+fitted.values <- predict(final_rf, cleandnds[, keep_feats])
+plot(cleandnds[, respname],  fitted.values,col="green")
+

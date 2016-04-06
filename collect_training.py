@@ -25,7 +25,7 @@ import scipy.stats
 LOGGER = logging.getLogger(__name__)
 LOGGER.propagate = 1
 
-PROCS = 6
+PROCS = 10
 
 def get_tree_len_depth(treefilename, polytomy_brlen_thresh=0.0):
     """
