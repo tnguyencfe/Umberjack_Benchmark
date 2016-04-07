@@ -36,7 +36,7 @@ NUM_NAMES <- c("Window_Start",
                "dN_minus_dS.Act",
                "TreeLen.Act",
                "TreeLenPerRead.Act",
-               #"TreeDepth.Act",
+               "TreeDepth.Act",
                "TreeDist.Act",
                "TreeDistPerRead.Act",
                "Polytomy.Act",
@@ -58,29 +58,18 @@ NUM_NAMES <- c("Window_Start",
                "Window_Subst.Act")
 
 # Numeric variables that might affect Umberjack accuracy
+# Some collinear variables are OK, but we manually remove variables that we think are low impact.
 COVAR_NAMES <- NUM_NAMES[!NUM_NAMES %in% 
                            c(NUM_RESP_NAMES,
                              "dNdS.Act", "dNdS.Exp", "dN_minus_dS.Act", "dN_minus_dS.Exp", 
-                             # In separate analysis, conservation and entropy are highly correlated.
-                             # When we use speedglm, it bugs out after it removes highly correlated variables.
-                             # So we do it for them.
-                             "ConserveCodon.Act", "ConserveCodon.Exp", "Window_Conserve.Act",
-                             #"UnambigCodonRate.Act", 
-                             #"Window_UnambigCodonRate.Act",
-                             # These are highly correlated with N, S
-                             #"Subst.Act", 
-                             "Subst.Exp",
-                             "EN.Exp", "ES.Exp", "N.Exp", "S.Exp",                             
+                             # In separate analysis, conservation and entropy are highly correlated, but entropy gives more info.                             
+                             "ConserveCodon.Act", "ConserveCodon.Exp", "Window_Conserve.Act",  
                              "Window_Start", "Window_End", "CodonSite", "Reads.Act", "PopSize.Act", "Is_Break",
                              "TreeLen.Act",
                              "TreeDist.Act",  #  too much overlap with TreeDistPerRead.Act
+                             "TreeDepth.Act",  # this is arbitrary for unrooted trees
                              "Polytomy.Act",
-                             "UnknownPerCodon.Act",
-                             "Window_Breaks",
-                             "Window_Entropy.Act",
-                             "Window_UnambigCodonRate.Act",
-                             "Window_ErrPerCodon.Act",
-                             "Window_Subst.Act",
+                             "UnknownPerCodon.Act",                             
                              "ResolvedPerSub.Act"  # No more resolved subs
                            )
                          ]
@@ -96,8 +85,39 @@ WINDOW_SITE_COVAR_NAMES <- COVAR_NAMES[!COVAR_NAMES %in% WINDOW_COVAR_NAMES]
 # categorical variables
 CAT_COVAR_NAMES <- c() # c("IsLowSubst.Act")
 
+
+
+# Numeric variables that have collinearity removed
+NO_CORR_COVAR_NAMES <- NUM_NAMES[!NUM_NAMES %in% 
+                                   c(NUM_RESP_NAMES,
+                                     "dNdS.Act", "dNdS.Exp", "dN_minus_dS.Act", "dN_minus_dS.Exp", 
+                                     # In separate analysis, conservation and entropy are highly correlated.
+                                     # When we use speedglm, it bugs out after it removes highly correlated variables.
+                                     # So we do it for them.
+                                     "ConserveCodon.Act", "ConserveCodon.Exp", "Window_Conserve.Act",
+                                     #"UnambigCodonRate.Act", 
+                                     #"Window_UnambigCodonRate.Act",
+                                     # These are highly correlated with N, S
+                                     "Subst.Act", 
+                                     "Subst.Exp",
+                                     "EN.Exp", "ES.Exp", "N.Exp", "S.Exp",                             
+                                     "Window_Start", "Window_End", "CodonSite", "Reads.Act", "PopSize.Act", "Is_Break",
+                                     "TreeLen.Act",
+                                     "TreeDist.Act",  #  too much overlap with TreeDistPerRead.Act
+                                     "TreeDepth.Act",  # this is arbitrary for unrooted trees
+                                     "Polytomy.Act",
+                                     "UnknownPerCodon.Act",
+                                     "Window_Breaks",
+                                     "Window_Entropy.Act",
+                                     "Window_UnambigCodonRate.Act",
+                                     "Window_ErrPerCodon.Act",
+                                     "Window_Subst.Act",
+                                     "ResolvedPerSub.Act"  # No more resolved subs
+                                   )
+                                 ]
+
 # variables used in linear regression
-LM_COVAR_NAMES <- c(CAT_COVAR_NAMES, COVAR_NAMES)
+LM_COVAR_NAMES <- c(CAT_COVAR_NAMES, NO_CORR_COVAR_NAMES)
 
 REAL_LM_COVAR_NAMES <- c("Reads.Act",
                          "UnambigCodonRate.Act",
@@ -432,7 +452,7 @@ rf_feat_sel_cont_rfe <- function(dnds, respname, feats, folds, trees_per_rf, cor
       parallel_randomForest <- foreach(ntree=c(rep(trees_per_core, cores_per_rf-1), leftover_trees_per_core),
                                        .combine=combine, .packages='randomForest') %dopar% {
         #randomForest(x, y, importance = first, ntree=ntree, keep.inbag=TRUE, keep.forest=TRUE, ...)
-         randomForest(x, y, importance = first, ntree=ntree, keep.inbag=TRUE, keep.forest=TRUE, ...)
+         randomForest(x, y, importance = first , ntree=ntree, keep.inbag=TRUE, keep.forest=TRUE, ...)
       }
       return (parallel_randomForest)
       
@@ -462,12 +482,25 @@ rf_feat_sel_cont_rfe <- function(dnds, respname, feats, folds, trees_per_rf, cor
   
   print(rfe_cont_results)
   # list the chosen features
-  print(paste0("Predictors\n", predictors(rfe_cont_results)))  # results$optVariables also does the same
+  print(paste0("Selected Predictors Chosen by Importance Across all resamplings for all model sizes \n", predictors(rfe_cont_results)))  # results$optVariables also does the same
   
   # per-variable importance
-  print("Variable Importance")
+  print("Variable Importance of rfe (importance amongst resamplings for optimal size)")
   print(varImp(rfe_cont_results))
   
+  # Best sizes
+  print(paste0("Best model size = ", rfe_cont_results$optsize))
+        
+  
+  # per variable importance across all resamplings for the full model containing all variables
+  adply(.data=rfe_cont_results,
+        .variables="var",
+        .fun=function(x) {mean$x$Overall})
+  #ddply(.data=rfe_cont_results$variables[rfe_cont_results$variables$Variables == max(rfe_cont_results$variables$Variables),],
+  ddply(.data=rfe_cont_results$variables,
+        .variables="var",
+        .fun=function(x) {
+          data.frame(MeanIncMSEAcrossResamplings = mean(x$Overall, na.rm = TRUE))})
   # the time it took to finish
   print("Timing")
   print(rfe_cont_results$times)
@@ -558,7 +591,7 @@ do_predict_cont <- function(dnds_filename=NULL, folds=5, trees_per_rf=501, cores
   object_size(dnds)
   print(paste0("mem used from dnds=", mem_used()))
   
-  feats <- c(LM_COVAR_NAMES)
+  feats <- c(COVAR_NAMES)
   
   
   print("About to do random forest regression")
@@ -642,7 +675,7 @@ do_predict_class_diversify <- function(train_dnds_csv=NULL, xfold=1) {
   object_size(dnds)
   print(paste0("dnds mem=", mem_used()))
     
-  feats <- c(LM_COVAR_NAMES)
+  feats <- c(COVAR_NAMES)
   
   
   print("About to do random forest feature selection to determine what affects accuracy of umberjack predictions of diversifying sites")
