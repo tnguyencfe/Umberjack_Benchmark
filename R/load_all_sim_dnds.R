@@ -482,25 +482,25 @@ rf_feat_sel_cont_rfe <- function(dnds, respname, feats, folds, trees_per_rf, cor
   
   print(rfe_cont_results)
   # list the chosen features
-  print(paste0("Selected Predictors Chosen by Importance Across all resamplings for all model sizes \n", predictors(rfe_cont_results)))  # results$optVariables also does the same
+  print(paste0("\nSelected Predictors Chosen by Importance Across all resamplings for all model sizes \n", predictors(rfe_cont_results)))  # results$optVariables also does the same
   
   # per-variable importance
-  print("Variable Importance of rfe (importance amongst resamplings for optimal size)")
+  print("\nVariable Importance of rfe (importance amongst resamplings for optimal size)")
   print(varImp(rfe_cont_results))
   
   # Best sizes
-  print(paste0("Best model size = ", rfe_cont_results$optsize))
+  print(paste0("\nBest model size = ", rfe_cont_results$optsize))
         
   
   # per variable importance across all resamplings for the full model containing all variables
-  adply(.data=rfe_cont_results,
-        .variables="var",
-        .fun=function(x) {mean$x$Overall})
-  #ddply(.data=rfe_cont_results$variables[rfe_cont_results$variables$Variables == max(rfe_cont_results$variables$Variables),],
-  ddply(.data=rfe_cont_results$variables,
-        .variables="var",
-        .fun=function(x) {
-          data.frame(MeanIncMSEAcrossResamplings = mean(x$Overall, na.rm = TRUE))})
+  print("\nVariable importance across all resamplings but only for the full sized model")
+  finalImpFull <- ddply(.data=rfe_cont_results$variables[rfe_cont_results$variables$Variables == max(rfe_cont_results$variables$Variables),],
+                        .variables="var",
+                        .fun=function(x) {
+                          data.frame(MeanIncMSEAcrossResamplings = mean(x$Overall, na.rm = TRUE))})
+  finalImpFull <- finalImpFull[order(-finalImpFull$MeanIncMSEAcrossResamplings),]
+  print(finalImpFull)
+  
   # the time it took to finish
   print("Timing")
   print(rfe_cont_results$times)
