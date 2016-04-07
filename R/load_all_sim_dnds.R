@@ -431,7 +431,8 @@ rf_feat_sel_cont_rfe <- function(dnds, respname, feats, folds, trees_per_rf, cor
       
       parallel_randomForest <- foreach(ntree=c(rep(trees_per_core, cores_per_rf-1), leftover_trees_per_core),
                                        .combine=combine, .packages='randomForest') %dopar% {
-        randomForest(x, y, importance = first, ntree=ntree, ...)
+        #randomForest(x, y, importance = first, ntree=ntree, keep.inbag=TRUE, keep.forest=TRUE, ...)
+         randomForest(x, y, importance = first, ntree=ntree, keep.inbag=TRUE, keep.forest=TRUE, ...)
       }
       return (parallel_randomForest)
       
@@ -583,6 +584,23 @@ do_predict_cont <- function(dnds_filename=NULL, folds=5, trees_per_rf=501, cores
   print("RSquared for all simulation data")
   print(r2)
   
+  # Get the MSE for out of bag predictions. If dataset not given in predict() then out of bag predictions given
+  # http://stats.stackexchange.com/questions/35609/why-do-i-need-bag-composition-to-calculate-oob-error-of-combined-random-forest-m/35613#35613
+  lod_dnds_dat$oob_pred <- predict(rfe_cont_results$fit)
+  #oob_pred <- predict(rfe_cont_results$fit)
+  lod_dnds_dat$oob_resid <- lod_dnds_dat$oob_pred - rfe_cont_results$fit$y
+  #oob_resid <- oob_pred - rfe_cont_results$fit$y
+  oob_mse <- mean(lod_dnds_dat$oob_resid^2)
+  print("Mse for OOB")
+  print(oob_mse)
+  
+  # Get the RSquared for out of bag predictions.  
+  #ave_resp <- mean(rfe_cont_results$fit$y)
+  #oob_rsq <- 1 - sum(oob_resid^2)/sum((ave_resp - rfe_cont_results$fit$y)^2)  # We get the same results whether we calc manually or use rSquared()
+  oob_rsq <- rSquared(y=rfe_cont_results$fit$y, resid=lod_dnds_dat$oob_resid)
+  print("RSquared for OOB")
+  print(oob_rsq)
+  
   
   # Save the predictions to file
   write.table(lod_dnds_dat, file="umberjack_accuracy_predict.csv", sep=",", row.names=FALSE)
@@ -598,6 +616,16 @@ do_predict_cont <- function(dnds_filename=NULL, folds=5, trees_per_rf=501, cores
   
   ggsave(filename="RandomForestRegressionRsq.pdf", plot=fig, device=pdf)
   
+  #' Plot the oob random forest regression fit
+  fig <- ggplot(lod_dnds_dat, aes(x=SqDist_dn_minus_dS, y=oob_pred)) + 
+    geom_point(alpha=0.5, shape=1) +
+    geom_smooth(method="lm") + 
+    geom_abline(color="red") +
+    xlab("\n [(Umberjack dn-ds) - (True dn-ds)]^2") + 
+    ylab("RF Predicted [(Umberjack dn-ds) - (True dn-ds)]^2 OOB \n")
+  ggtitle(paste("RandomForest Regression in R r^2=", r2, sep=""))
+  
+  ggsave(filename="RandomForestRegressionRsqOOB.pdf", plot=fig, device=pdf)
   
   print(paste0("memused after finish= ", mem_used()))
 }
