@@ -28,6 +28,7 @@ NUM_NAMES <- c("Window_Start",
                "UnknownPerCodon.Act",
                "ErrPerCodon.Act",
                "Subst.Act",
+               "Subst.Exp",
                "N.Act",
                "S.Act",
                "EN.Act",
@@ -65,6 +66,7 @@ COVAR_NAMES <- NUM_NAMES[!NUM_NAMES %in%
                              # In separate analysis, conservation and entropy are highly correlated, but entropy gives more info.                             
                              "ConserveCodon.Act", "ConserveCodon.Exp", "Window_Conserve.Act",  
                              "Window_Start", "Window_End", "CodonSite", "Reads.Act", "PopSize.Act", "Is_Break",
+                             "N.Exp", "S.Exp", # too much overlap with Subst.Exp and dnMinusDs.Exp
                              "TreeLen.Act",
                              "TreeDist.Act",  #  too much overlap with TreeDistPerRead.Act
                              "TreeDepth.Act",  # this is arbitrary for unrooted trees
