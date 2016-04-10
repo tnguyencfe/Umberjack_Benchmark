@@ -23,6 +23,7 @@ NUM_NAMES <- c("Window_Start",
                "UnambigCodonRate.Act",
                "AADepth.Act",
                "PopSize.Act",
+               "Coverage.Act",
                "ConserveCodon.Act",
                "EntropyCodon.Act",
                "UnknownPerCodon.Act",
@@ -127,6 +128,7 @@ REAL_LM_COVAR_NAMES <- c("Reads.Act",
                          "AADepth.Act",
                          "ConserveCodon.Act",
                          "EntropyCodon.Act",
+                         "Subst.Act",
                          "N.Act",
                          "S.Act",
                          "EN.Act",
@@ -134,7 +136,7 @@ REAL_LM_COVAR_NAMES <- c("Reads.Act",
                          "TreeLenPerRead.Act",
                          "TreeDepth.Act",
                          "PolytomyPerRead.Act",
-                         "ResolvedPerSub.Act",                                                  
+                         #"ResolvedPerSub.Act",                                                  
                          "Window_Entropy.Act", "Window_UnambigCodonRate.Act", "Window_Subst.Act"
                          )
 
@@ -811,6 +813,18 @@ do_predict_cont_real <- function(dnds_filename=NULL, folds=5, trees_per_rf=501, 
   print("RSquared for all simulation data")
   print(r2)
   
+  # Get the MSE for out of bag predictions. If dataset not given in predict() then out of bag predictions given
+  # http://stats.stackexchange.com/questions/35609/why-do-i-need-bag-composition-to-calculate-oob-error-of-combined-random-forest-m/35613#35613
+  lod_dnds_dat$oob_pred <- predict(rfe_cont_results_real$fit)
+  lod_dnds_dat$oob_resid <- lod_dnds_dat$oob_pred - rfe_cont_results_real$fit$y
+  oob_mse <- mean(lod_dnds_dat$oob_resid^2)
+  print("Mse for OOB")
+  print(oob_mse)
+  
+  # Get the RSquared for out of bag predictions.  
+  oob_rsq <- rSquared(y=rfe_cont_results_real$fit$y, resid=lod_dnds_dat$oob_resid)
+  print("RSquared for OOB")
+  print(oob_rsq)
   
   # Save the predictions to file
   write.table(lod_dnds_dat, file="umberjack_accuracy_predict.real.csv", sep=",", row.names=FALSE)
