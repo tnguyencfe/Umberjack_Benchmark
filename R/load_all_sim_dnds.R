@@ -66,6 +66,7 @@ COVAR_NAMES <- NUM_NAMES[!NUM_NAMES %in%
                              "dNdS.Act", "dNdS.Exp", "dN_minus_dS.Act", "dN_minus_dS.Exp", 
                              # In separate analysis, conservation and entropy are highly correlated, but entropy gives more info.                             
                              "ConserveCodon.Act", "ConserveCodon.Exp", "Window_Conserve.Act",  
+                             "Coverage.Act",  # this is the codon depth.  But we already have unambig codon rate.
                              "Window_Start", "Window_End", "CodonSite", "Reads.Act", "PopSize.Act", "Is_Break",
                              "N.Exp", "S.Exp", # too much overlap with Subst.Exp and dnMinusDs.Exp
                              "EN.Exp", #  too much overlap with dnminusds.exp if we include subst.act
@@ -99,6 +100,7 @@ NO_CORR_COVAR_NAMES <- NUM_NAMES[!NUM_NAMES %in%
                                      # When we use speedglm, it bugs out after it removes highly correlated variables.
                                      # So we do it for them.
                                      "ConserveCodon.Act", "ConserveCodon.Exp", "Window_Conserve.Act",
+                                     "Coverage.Act",  # this is the codon depth.  But we already have unambig codon rate.
                                      #"UnambigCodonRate.Act", 
                                      #"Window_UnambigCodonRate.Act",
                                      # These are highly correlated with N, S
