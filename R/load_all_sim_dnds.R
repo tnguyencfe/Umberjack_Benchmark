@@ -68,6 +68,7 @@ COVAR_NAMES <- NUM_NAMES[!NUM_NAMES %in%
                              "ConserveCodon.Act", "ConserveCodon.Exp", "Window_Conserve.Act",  
                              "Window_Start", "Window_End", "CodonSite", "Reads.Act", "PopSize.Act", "Is_Break",
                              "N.Exp", "S.Exp", # too much overlap with Subst.Exp and dnMinusDs.Exp
+                             "EN.Exp", #  too much overlap with dnminusds.exp if we include subst.act
                              "TreeLen.Act",
                              "TreeDist.Act",  #  too much overlap with TreeDistPerRead.Act
                              "TreeDepth.Act",  # this is arbitrary for unrooted trees
