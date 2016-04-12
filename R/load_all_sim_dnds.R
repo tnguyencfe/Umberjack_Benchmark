@@ -660,7 +660,7 @@ do_predict_cont <- function(dnds_filename=NULL, folds=5, trees_per_rf=501, cores
     geom_abline(color="red") +
     xlab("\n [(Umberjack dn-ds) - (True dn-ds)]^2") + 
     ylab("RF Predicted [(Umberjack dn-ds) - (True dn-ds)]^2 OOB \n")
-  ggtitle(paste("RandomForest Regression in R r^2=", r2, sep=""))
+  ggtitle(paste("RandomForest Regression in R r^2=", oob_rsq, sep=""))
   
   ggsave(filename="RandomForestRegressionRsqOOB.pdf", plot=fig, device=pdf)
   
@@ -840,6 +840,16 @@ do_predict_cont_real <- function(dnds_filename=NULL, folds=5, trees_per_rf=501, 
   
   ggsave(filename="RandomForestRegressionRsq.real.pdf", plot=fig, device=pdf)
   
+  #' Plot the oob random forest regression fit
+  fig <- ggplot(lod_dnds_dat, aes(x=SqDist_dn_minus_dS, y=oob_pred)) + 
+    geom_point(alpha=0.5, shape=1) +
+    geom_smooth(method="lm") + 
+    geom_abline(color="red") +
+    xlab("\n [(Umberjack dn-ds) - (True dn-ds)]^2") + 
+    ylab("RF Predicted [(Umberjack dn-ds) - (True dn-ds)]^2 OOB \n")
+  ggtitle(paste("RandomForest Regression in R r^2=", oob_rsq, sep=""))
+  
+  ggsave(filename="RandomForestRegressionRsqOOB.real.pdf", plot=fig, device=pdf)
   
   print(paste0("memused after finish= ", mem_used()))
 }
