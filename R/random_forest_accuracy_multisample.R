@@ -12,7 +12,7 @@ library(pryr)
 
 
 FOLDS <- 5
-SEED <- 7
+#SEED <- 7
 CORES_PER_RF <- 4  # We do cross validation in parallel.  But for each cross validation, we also do the random forest trees in parallel
 TREES_PER_RF <- 501  # total random forest trees to execute for each cross validation
 
@@ -30,10 +30,20 @@ if (length(args) >= 2) {
 } else {
   cores_per_rf <- CORES_PER_RF
 }
-slaves <- startMPIcluster(count=(FOLDS * cores_per_rf))
+if (length(args) >= 3) {
+  folds <- as.integer(args[3])
+} else {
+  folds <- FOLDS
+}
+if (length(args) >= 4) {
+  seed <- as.integer(args[4])
+} else {
+  seed <- NULL
+}
+slaves <- startMPIcluster(count=(folds * cores_per_rf))
 registerDoMPI(slaves)
 
-do_predict_cont(dnds_filename=dnds_filename, folds=FOLDS, trees_per_rf=TREES_PER_RF, cores_per_rf=cores_per_rf)
+do_predict_cont(dnds_filename=dnds_filename, folds=folds, trees_per_rf=TREES_PER_RF, cores_per_rf=cores_per_rf, seed=seed)
 
 closeCluster(slaves)
 mpi.quit()

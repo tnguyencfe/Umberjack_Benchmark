@@ -4,10 +4,11 @@ library(caret)
 library(randomForest)
 library(foreach)
 library(miscTools)  # for rSquared
-
+library(doRNG)  # for parallel random seeds
+library(doMPI)  # for mpi back
 
 PSEUDOCOUNT <- 1e-7
-
+SEED <- 389291
 
 
 NUM_RESP_NAMES <- c("LOD_dNdS", "Dist_dn_minus_dS", "AbsLOD_dNdS", "AbsDist_dn_minus_dS", "SqDist_dn_minus_dS")
@@ -431,7 +432,7 @@ rf_feat_sel_class_rfe <- function(dnds, respname, feats, xfold=1) {
 
 
 # Random Forest, Recursive Feature Elmination  (Backwards Selection)  for continuous response
-rf_feat_sel_cont_rfe <- function(dnds, respname, feats, folds, trees_per_rf, cores_per_rf) {
+rf_feat_sel_cont_rfe <- function(dnds, respname, feats, folds, trees_per_rf, cores_per_rf, seed=NULL) {
   
   print(paste0("Response=", respname))
   print(paste0("Features=", paste0(feats, collapse=", ")))
@@ -443,7 +444,14 @@ rf_feat_sel_cont_rfe <- function(dnds, respname, feats, folds, trees_per_rf, cor
   print("Cleaned dnds summary:")
   print(summary(cleandnds))
   
+  
+  
   # Override default number of trees from 500 to 501 to break ties, Use parallelized random forest
+#   if (!is.null(seed)) {
+#     print (paste0("Using seed for parallel", seed))
+#     #registerDoRNG(seed)  
+#   }
+#   
   new_rfFuncs <- rfFuncs
   new_rfFuncs$fit <- 
     function (x, y, first, last, ...) 
@@ -456,10 +464,11 @@ rf_feat_sel_cont_rfe <- function(dnds, respname, feats, folds, trees_per_rf, cor
       trees_per_core <- trees_per_rf %/% cores_per_rf
       leftover_trees_per_core <- trees_per_rf - trees_per_core * (cores_per_rf-1)
       
+      
       parallel_randomForest <- foreach(ntree=c(rep(trees_per_core, cores_per_rf-1), leftover_trees_per_core),
                                        .combine=combine, .packages='randomForest') %dopar% {
         #randomForest(x, y, importance = first, ntree=ntree, keep.inbag=TRUE, keep.forest=TRUE, ...)
-         randomForest(x, y, importance = first , ntree=ntree, keep.inbag=TRUE, keep.forest=TRUE, ...)
+         randomForest(x, y, importance = TRUE , ntree=ntree, keep.inbag=TRUE, keep.forest=TRUE,  ...)
       }
       return (parallel_randomForest)
       
@@ -471,9 +480,14 @@ rf_feat_sel_cont_rfe <- function(dnds, respname, feats, folds, trees_per_rf, cor
                         #rerank=TRUE,  # rerank features after eliminate
                         saveDetails=TRUE,   # save predictions and variable importances from selection process
                         returnResamp="all",   # save all resampling summary metrics
-                        verbose=TRUE
+                        verbose=TRUE,
+                        seeds=NULL
                         )
-    
+  
+  if (!is.null(seed)) {
+    print (paste0("Using seed for rfe", seed))
+    set.seed(seed)  
+  }
   # Automatically parallelized when you use library doMC or doMPI
   # This takes 6 minutes even for A bag only has 5000 samples.  You can get timing through results$timing
   rfe_cont_results <- rfe(x=cleandnds[, feats], y=cleandnds[, respname], 
@@ -589,7 +603,7 @@ rf_train <- function(dnds, respname, feats) {
 
 
 # Does all the work for regression
-do_predict_cont <- function(dnds_filename=NULL, folds=5, trees_per_rf=501, cores_per_rf=1) {
+do_predict_cont <- function(dnds_filename=NULL, folds=5, trees_per_rf=501, cores_per_rf=1, seed=NULL) {
   
   dnds <- get_all_sim_dnds(dnds_filename)
   dim(dnds)
@@ -603,7 +617,7 @@ do_predict_cont <- function(dnds_filename=NULL, folds=5, trees_per_rf=501, cores
   
   print("About to do random forest regression")
   rfe_cont_results <- rf_feat_sel_cont_rfe(dnds=dnds, respname="SqDist_dn_minus_dS", feats=feats, 
-                                           folds=folds, trees_per_rf=trees_per_rf, cores_per_rf=cores_per_rf)
+                                           folds=folds, trees_per_rf=trees_per_rf, cores_per_rf=cores_per_rf, seed=seed)
   
   save(rfe_cont_results, file="rfe_cont_results.RData")
   
@@ -776,7 +790,7 @@ do_predict_class_diversify_real <- function() {
 }
 
 # Does all the work for finding Umberjack accuracy for regression on real sites 
-do_predict_cont_real <- function(dnds_filename=NULL, folds=5, trees_per_rf=501, cores_per_rf=1) {
+do_predict_cont_real <- function(dnds_filename=NULL, folds=5, trees_per_rf=501, cores_per_rf=1, seed=NULL) {
   
   dnds <- get_all_sim_dnds(dnds_filename)
   dim(dnds)
@@ -790,7 +804,7 @@ do_predict_cont_real <- function(dnds_filename=NULL, folds=5, trees_per_rf=501, 
   
   print("About to do random forest regression on features available for realistic data")
   rfe_cont_results_real <- rf_feat_sel_cont_rfe(dnds=dnds, respname="SqDist_dn_minus_dS", feats=feats, 
-                                                folds=folds, trees_per_rf=trees_per_rf, cores_per_rf=cores_per_rf)
+                                                folds=folds, trees_per_rf=trees_per_rf, cores_per_rf=cores_per_rf, seed=seed)
   
   # Save environment var to file
   save(rfe_cont_results_real, file="rfe_cont_results_real.RData")
