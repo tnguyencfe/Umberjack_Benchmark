@@ -287,7 +287,7 @@ def collect_dnds(output_dir, output_csv_filename, sim_data_config, comments=None
                                              is_count_pad=False, is_count_gaps=False, is_count_ambig=False)
 
 
-                    pval_same = cmp_freq_distro(full_popn_codon_freq, slice_codon_freq)
+                    pval_same = cmp_freq_distro(slice_codon_freq, full_popn_codon_freq, is_scale=False)
                     outrow["P_SameCodonFreq"] = pval_same
 
                     if reader:
@@ -344,7 +344,8 @@ def cmp_freq_distro(obs_freq_distro, exp_freq_distro, is_scale=True):
 
     :param dict obs_freq_distro:  {str symbol:  int count}
     :param dict exp_freq_distro:   {str symbol:  int count}
-    :param bool is_scale:  whether to scale the observed to the expected frequency counts
+    :param bool is_scale:  whether to scale the observed to the expected frequency counts.
+    NB:  that you will get NAN pvalues if the observed or expected is  < 1.  Must be positive
     :return float:  probability that the frequency distributions are the same
     """
     symbols = set(obs_freq_distro.keys() + exp_freq_distro.keys())
