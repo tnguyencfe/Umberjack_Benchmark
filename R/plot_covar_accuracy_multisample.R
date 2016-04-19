@@ -39,7 +39,8 @@ if (exists("dnds_filename")) {
 } else {
   dnds <- get_all_sim_dnds()
 }
-# dim(dnds)
+dim(dnds)
+head(dnds)
 summary(dnds)
 
 # Per Window data
@@ -48,6 +49,20 @@ dim(window)
 summary(window)
 
 
+
+ave_dnds <- ddply(.data=dnds,
+              .variables=c("File", "CodonSite"),
+              .fun=function(x) {
+                if (length(unique(x$dN_minus_dS.Exp)) > 1) {
+                  stop("there should only be one expected dn-ds per site")
+                }
+                data.frame(Ave.dN_minus_dS.Act = weighted.mean(x$dN_minus_dS.Act,
+                                                        x$UnambigCodonRate.Act * x$Reads.Act, na.rm=TRUE),
+                           dN_minus_dS.Exp = x$dN_minus_dS.Exp[1])
+              })
+summary(ave_dnds)
+head(ave_dnds)
+dim(ave_dnds)
 
 
 
@@ -132,29 +147,213 @@ print(concord$rho.c$est)
 #' **Concordance for dN-dS when all considered = `r concord$rho.c$est`**
 #' 
 
-# #' **Now Remove Window-Sites with Phylogeny Substitutions Only Arising from Ambiguous Codons**  
-# #' 
-# gooddnds <- dnds[dnds$IsLowSubst.Act == FALSE, ]
-# summary(gooddnds)
-# dim(gooddnds)
-# 
-# concord <- epi.ccc(gooddnds[!is.na(gooddnds$dNdS.Act) & !is.na(gooddnds$dNdS.Exp), ]$dNdS.Act, 
-#                    gooddnds[!is.na(gooddnds$dNdS.Act) & !is.na(gooddnds$dNdS.Exp), ]$dNdS.Exp)
-# print(concord$rho.c)
-# print(concord$rho.c$est)
-# #' **Concordance for dN/dS when only good window-sites considered = `r concord$rho.c$est`**
-# #' 
-# 
-# concord <- epi.ccc(gooddnds[!is.na(gooddnds$dN_minus_dS.Act) & !is.na(gooddnds$dN_minus_dS.Exp), ]$dN_minus_dS.Act, 
-#                    gooddnds[!is.na(gooddnds$dN_minus_dS.Act) & !is.na(gooddnds$dN_minus_dS.Exp), ]$dN_minus_dS.Exp)
-# print(concord$rho.c)
-# print(concord$rho.c$est)
-# #' **Concordance for dN-dS when only good window-sites considered = `r concord$rho.c$est`**
-# #' 
+nona_dnds <- subset(dnds, !is.na(dnds$dN_minus_dS.Exp) & !is.na(dnds$dN_minus_dS.Act))
+rsq <- rSquared(y=nona_dnds$dN_minus_dS.Exp, resid = nona_dnds$dN_minus_dS.Act - nona_dnds$dN_minus_dS.Exp)
+print(rsq)
+#' ** Explained variance  = `r rsq `**
+#
 
+#' **Now Remove Window-Sites with Phylogeny Substitutions Only Arising from Ambiguous Codons, etc**  
+#' 
+gooddnds <- dnds[dnds$Subst.Act > 5 & 
+                   dnds$UnambigCodonRate.Act > 0.8 &
+                   dnds$Reads.Act > 50 &
+                   dnds$ES.Act > 0.5 & 
+                   #dnds$Window_Subst.Act > 10 &
+                   !is.na(dnds$dN_minus_dS.Act) & !is.na(dnds$dN_minus_dS.Exp),]
+summary(gooddnds)
+dim(gooddnds)
+head(gooddnds)
+
+#' Missing window-site predictions = `r length(gooddnds$dN_minus_dS.Act) / sum( !is.na(dnds$dN_minus_dS.Act)) `
+#' 
+length(gooddnds$dN_minus_dS.Act)
+sum( !is.na(dnds$dN_minus_dS.Act)) 
+length(gooddnds$dN_minus_dS.Act)/sum( !is.na(dnds$dN_minus_dS.Act)) 
+
+#' Missing site predictions = `r nrow(unique(gooddnds[, c("File", "CodonSite")]))/nrow(unique(dnds[!is.na(dnds$dN_minus_dS.Act), c("File", "CodonSite")]))`
+nrow(unique(gooddnds[, c("File", "CodonSite")]))
+nrow(unique(dnds[!is.na(dnds$dN_minus_dS.Act), c("File", "CodonSite")]))
+nrow(unique(gooddnds[, c("File", "CodonSite")]))/nrow(unique(dnds[!is.na(dnds$dN_minus_dS.Act), c("File", "CodonSite")]))
+
+rsq <- rSquared(y=gooddnds$dN_minus_dS.Exp, resid = gooddnds$dN_minus_dS.Act - gooddnds$dN_minus_dS.Exp)
+print(rsq)
+
+#' **Concordance for dn-ds when only good window-sites considered = `r concord$rho.c$est`**
+#' 
+
+concord <- epi.ccc(gooddnds$dN_minus_dS.Act, gooddnds$dN_minus_dS.Exp)
+print(concord$rho.c)
+#' **Concordance for dN-dS when only good window-sites considered = `r concord$rho.c$est`**
+#' 
+
+cor(gooddnds$dN_minus_dS.Act, gooddnds$dN_minus_dS.Exp, use="complete.obs", method="spearman")
+
+#' Averaged site dnds
+ave_gooddnds <- ddply(.data=gooddnds,
+                      .variables=c("File", "CodonSite"),
+                      .fun=function(x) {
+                        if (length(unique(x$dN_minus_dS.Exp)) > 1) {
+                          stop("there should only be one expected dn-ds per site")
+                        }
+                        data.frame(Ave.dN_minus_dS.Act = weighted.mean(x$dN_minus_dS.Act,
+                                                                       x$UnambigCodonRate.Act * x$Reads.Act, na.rm=TRUE),
+                                   dN_minus_dS.Exp = x$dN_minus_dS.Exp[1])
+                      })
+summary(ave_gooddnds)
+head(ave_gooddnds)
+dim(ave_gooddnds)
+
+#' Filtered ave site dn-ds versus expected
+#' 
+fig <- ggplot(ave_gooddnds, aes(x=dN_minus_dS.Exp, y=Ave.dN_minus_dS.Act)) + 
+  geom_abline(slope=1, color="red") + 
+  geom_point(alpha=0.2) + 
+  geom_smooth(method="lm") +   
+  ylab("Inferred dN-dS") + 
+  xlab("Expected dN-dS") + 
+  #ggtitle("Filtered Ave Site dnds vs Exp") + 
+  theme_bw() + 
+  theme(axis.title = element_text(size=20),
+        axis.text = element_text(size=16)) 
+print(fig)
+
+#' Rsquared
+rsq <- rSquared(y=ave_gooddnds$dN_minus_dS.Exp, resid = ave_gooddnds$Ave.dN_minus_dS.Act - ave_gooddnds$dN_minus_dS.Exp)
+print(rsq)
+
+#' **Concordance for ave dn-ds when only good window-sites considered = `r concord$rho.c$est`**
+#' 
+concord <- epi.ccc(ave_gooddnds$Ave.dN_minus_dS.Act, ave_gooddnds$dN_minus_dS.Exp)
+print(concord$rho.c)
+
+cor(ave_gooddnds$Ave.dN_minus_dS.Act, ave_gooddnds$dN_minus_dS.Exp, use="complete.obs", method="spearman")
+
+
+
+#' Choose best filter
+#' ------------------- 
+#' 
+#' See affect of rsquared and lins concordance on different filters
+#' Choose filter based on elbow of rsqred vs non-missing predictions.
+#' 
+        
+subst <- c(1, 2, 5, 10)
+unambig <-  c(0.7, 0.8, 0.9)
+reads <- c(10, 50, 100)
+es <- c(0.01, 0.5, 1)
+filters <- expand.grid(subst=subst, unambig=unambig, reads=reads, es=es)        
+
+do_filter_perf <- function(f) {  
+  filterdnds <- dnds[dnds$Subst.Act >= f$subst & 
+                       dnds$UnambigCodonRate.Act >= f$unambig &
+                       dnds$Reads.Act >= f$reads &
+                       dnds$ES.Act >= f$es & 
+                       !is.na(dnds$dN_minus_dS.Act) & !is.na(dnds$dN_minus_dS.Exp),]
+  
+  filter_rsq <- rSquared(y=filterdnds$dN_minus_dS.Exp, resid = filterdnds$dN_minus_dS.Act - filterdnds$dN_minus_dS.Exp)
+  filter_concord <- epi.ccc(filterdnds$dN_minus_dS.Act, filterdnds$dN_minus_dS.Exp)
+  filter_has_predict <- length(filterdnds$dN_minus_dS.Act)/sum( !is.na(dnds$dN_minus_dS.Act)) 
+    
+  filterave_gooddnds <- ddply(.data=filterdnds,
+                              .variables=c("File", "CodonSite"),
+                              .fun=function(x) {
+                                if (length(unique(x$dN_minus_dS.Exp)) > 1) {
+                                  stop("there should only be one expected dn-ds per site")
+                                }
+                                data.frame(Ave.dN_minus_dS.Act = weighted.mean(x$dN_minus_dS.Act,
+                                                                               x$UnambigCodonRate.Act * x$Reads.Act, na.rm=TRUE),
+                                           dN_minus_dS.Exp = x$dN_minus_dS.Exp[1])
+                              })
+  
+  filterave_rsq <- rSquared(y=filterave_gooddnds$dN_minus_dS.Exp, resid = filterave_gooddnds$Ave.dN_minus_dS.Act - filterave_gooddnds$dN_minus_dS.Exp)  
+  filterave_concord <- epi.ccc(filterave_gooddnds$Ave.dN_minus_dS.Act, filterave_gooddnds$dN_minus_dS.Exp)
+ 
+  orig_num_siteave_rows <- nrow(unique(dnds[!is.na(dnds$dN_minus_dS.Act), c("File", "CodonSite")]))
+  filterave_has_predict <- length(filterave_gooddnds$Ave.dN_minus_dS.Act) / orig_num_siteave_rows
+  
+  return (data.frame(filter_rsq = filter_rsq,
+                     filter_concord = filter_concord$rho.c$est,                     
+                     filter_has_predict = filter_has_predict,
+                     filterave_rsq = filterave_rsq,
+                     filterave_concord = filterave_concord$rho.c$est,
+                     filterave_has_predict = filterave_has_predict
+    ))
+}
+
+filename <- "./filter_perf.csv"
+if (file.exists(filename)) {
+  warning(paste0("Not regenerating filter performance ", filename))
+  filter_perf <- read.table(filename, sep=",", header=TRUE)
+} else {
+  filter_perf <-  adply(.data=filters,
+                        .margins=1,
+                        .fun=do_filter_perf)
+  
+  write.table(filter_perf, filename, sep=",", row.names=FALSE, quote=FALSE)
+}
+filter_perf <- filter_perf[filter_perf$subst > 1,] # this was retarded.  1 sub is obviously not enough.
+head(filter_perf)
+summary(filter_perf)
+dim(filter_perf)
+
+
+filter_perf$score_rsq <- filter_perf$filter_rsq + filter_perf$filter_has_predict
+head(filter_perf[order(-filter_perf$score_rsq),])
+best_score_rsq <- filter_perf[order(-filter_perf$score_rsq),][1,]
+
+filter_perf$score_concord <- filter_perf$filter_concord + filter_perf$filter_has_predict
+head(filter_perf[order(-filter_perf$score_concord),])
+best_score_concord <- filter_perf[order(-filter_perf$score_concord),][1,]
+
+#filter_perf$score_ave_rsq <- filter_perf$filterave_rsq + filter_perf$filterave_has_predict
+filter_perf$score_ave_rsq <- filter_perf$filterave_rsq
+head(filter_perf[order(-filter_perf$score_ave_rsq),])
+best_score_ave_rsq <- filter_perf[order(-filter_perf$score_ave_rsq),][1,]
+
+filter_perf$score_ave_concord <- filter_perf$filterave_concord * filter_perf$filterave_has_predict
+head(filter_perf[order(-filter_perf$score_ave_concord),])
+best_score_ave_concord <- filter_perf[order(-filter_perf$score_ave_concord),][1,]
+
+#' Elbow plot
+fig <- ggplot(filter_perf, aes(x=filter_has_predict, y=filter_rsq)) + 
+  geom_point() + 
+  geom_point(data=best_score_rsq, color="red", size=3) + 
+  geom_line() + 
+  theme_bw() + 
+  theme(axis.title = element_text(size=20),
+        axis.text = element_text(size=16)) 
+print(fig)
+
+fig <- ggplot(filter_perf, aes(x=filter_has_predict, y=filter_concord)) + 
+  geom_point() + 
+  geom_line() + 
+  geom_point(data=best_score_concord, color="red", size=3) + 
+  theme_bw() + 
+  theme(axis.title = element_text(size=20),
+        axis.text = element_text(size=16)) 
+print(fig)
+
+fig <- ggplot(filter_perf, aes(x=filterave_has_predict, y=filterave_rsq)) + 
+  geom_point() + 
+  geom_line() + 
+  geom_point(data=best_score_ave_rsq, color="red", size=3) + 
+  theme_bw() + 
+  theme(axis.title = element_text(size=20),
+        axis.text = element_text(size=16)) 
+print(fig)
+
+fig <- ggplot(filter_perf, aes(x=filterave_has_predict, y=filterave_concord)) + 
+  geom_point() + 
+  geom_line() + 
+  geom_point(data=best_score_ave_concord, color="red", size=3) + 
+  theme_bw() + 
+  theme(axis.title = element_text(size=20),
+        axis.text = element_text(size=16)) 
+print(fig)
 
 #' **concordance by Dataset**
-
+#' -----------
 concord <- ddply(.data=dnds, .variables="File", .fun=function(x) {
   data.frame(concord=epi.ccc(x$dN_minus_dS.Act, x$dN_minus_dS.Exp)$rho.c$est)
 })
@@ -258,3 +457,26 @@ fig <- ggplot(dnds[!is.na(dnds$dN_minus_dS.Exp) & !is.na(dnds$dN_minus_dS.Act), 
   ylab("Inferred dN-dS\n") + 
   ggtitle("Scatterplot Expected vs Inferred dN-dS")
 print(fig)
+
+
+realdnds <- read.table('/home/thuy/gitrepo/MutationPatterns/R/longshot/per_sample_dnds.csv', sep=",", header=TRUE)
+realdnds$Subst.Act <- realdnds$N.Act+ realdnds$S.Act
+summary(realdnds)
+dim(realdnds)
+
+dim(realdnds[realdnds$Subst.Act >= 2, ])
+nrow(realdnds[realdnds$Subst.Act >= 2, ]) / nrow(realdnds)
+
+dim(realdnds[realdnds$Subst.Act >= 5, ])
+nrow(realdnds[realdnds$Subst.Act >= 5, ]) / nrow(realdnds)
+
+realsubs <- read.table( '/home/thuy/gitrepo/MutationPatterns/R/longshot/timing/across_samples_sub.winsite.csv' , sep=",", header=TRUE)
+realsubs$Subst.Act <- realsubs$N.Act+ realsubs$S.Act
+summary(realsubs)
+dim(realsubs)
+
+dim(realsubs[realsubs$WinSiteSub >= 2, ])
+nrow(realsubs[realsubs$WinSiteSub >= 2, ]) / nrow(realsubs)
+
+dim(realsubs[realsubs$WinSiteSub >= 5, ])
+nrow(realsubs[realsubs$WinSiteSub >= 5, ]) / nrow(realsubs)
