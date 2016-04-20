@@ -153,12 +153,42 @@ print(rsq)
 #' ** Explained variance  = `r rsq `**
 #
 
+#' Averaged site dnds
+ave_site_dnds <- ddply(.data=nona_dnds[nona_dnds$UnambigCodonRate.Act > 0, ],
+                      .variables=c("File", "CodonSite"),
+                      .fun=function(x) {
+                        if (length(unique(x$dN_minus_dS.Exp)) > 1) {
+                          stop("there should only be one expected dn-ds per site")
+                        }
+                        data.frame(Ave.dN_minus_dS.Act = weighted.mean(x$dN_minus_dS.Act,
+                                                                       x$UnambigCodonRate.Act * x$Reads.Act, na.rm=TRUE),
+                                   Windows = length(x$Window_Start),
+                                   dN_minus_dS.Exp = x$dN_minus_dS.Exp[1])
+                      })
+
+summary(ave_site_dnds)
+head(ave_site_dnds)
+dim(ave_site_dnds)
+
+rsq <- rSquared(y=ave_site_dnds$Ave.dN_minus_dS.Act, resid = (ave_site_dnds$Ave.dN_minus_dS.Act - ave_site_dnds$dN_minus_dS.Exp))
+print(rsq)
+concord <- epi.ccc(ave_site_dnds$Ave.dN_minus_dS.Act, ave_site_dnds$dN_minus_dS.Exp)
+print(concord$rho.c)
+
+aved_ideal <- ddply(ave_site_dnds, "File", function(x) {
+  concord <- epi.ccc(x$Ave.dN_minus_dS.Act, x$dN_minus_dS.Exp)
+  data.frame(concord_low=concord$rho$lower,
+             concord_est=concord$rho$est,
+             concord_hi=concord$rho$upper)
+})
+write.table(aved_ideal, file="site_ave_dnds_concord_by_dataset.csv", sep=",", quote=FALSE)
+
 #' **Now Remove Window-Sites with Phylogeny Substitutions Only Arising from Ambiguous Codons, etc**  
 #' 
-gooddnds <- dnds[dnds$Subst.Act > 5 & 
-                   dnds$UnambigCodonRate.Act > 0.8 &
-                   dnds$Reads.Act > 50 &
-                   dnds$ES.Act > 0.5 & 
+gooddnds <- dnds[dnds$Subst.Act >= 5 & 
+                   dnds$UnambigCodonRate.Act >= 0.8 &
+                   dnds$Reads.Act >= 50 &
+                   dnds$ES.Act >= 0.5 & 
                    #dnds$Window_Subst.Act > 10 &
                    !is.na(dnds$dN_minus_dS.Act) & !is.na(dnds$dN_minus_dS.Exp),]
 summary(gooddnds)
@@ -480,3 +510,83 @@ nrow(realsubs[realsubs$WinSiteSub >= 2, ]) / nrow(realsubs)
 
 dim(realsubs[realsubs$WinSiteSub >= 5, ])
 nrow(realsubs[realsubs$WinSiteSub >= 5, ]) / nrow(realsubs)
+
+#'ave dnds
+#'
+ave_dnds <- 
+  
+# rf predicted stuff
+predicted <- read.table("lhs_regression_real_fix/umberjack_accuracy_predict.real.csv", sep=",", header=TRUE)
+summary(predicted)
+dim(predicted)
+
+
+# rsquared of the true dnds vs expected dns
+rSquared(y=predicted$dN_minus_dS.Act, resid=(predicted$dN_minus_dS.Act - predicted$dN_minus_dS.Exp))
+# concordance  of the true dnds vs expected dns
+epi.ccc(predicted$dN_minus_dS.Act, predicted$dN_minus_dS.Exp)$rho.c
+# squared correlation.  ie true r2
+cor(predicted$dN_minus_dS.Act, predicted$dN_minus_dS.Exp)^2
+
+ave_predicted <- ddply(predicted, c("File", "CodonSite"), 
+                       function(x) {
+                         data.frame(Ave.dN_minus_dS.Act = weighted.mean(x$dN_minus_dS.Act, 
+                                                                        x$UnambigCodonRate.Act * x$Reads.Act, na.rm=TRUE),
+                                    Windows = length(x$Window_Start),
+                                    dN_minus_dS.Exp = x$dN_minus_dS.Act[1])
+                       })
+head(ave_predicted)
+dim(ave_predicted)
+
+rSquared(y=ave_predicted$Ave.dN_minus_dS.Act, resid=(ave_predicted$Ave.dN_minus_dS.Act - ave_predicted$dN_minus_dS.Exp))
+# concordance  of the true dnds vs expected dns
+epi.ccc(ave_predicted$Ave.dN_minus_dS.Act, ave_predicted$dN_minus_dS.Exp)$rho.c
+# squared correlation.  ie true r2
+cor(ave_predicted$Ave.dN_minus_dS.Act, ave_predicted$dN_minus_dS.Exp)^2
+
+
+# > IQR(gold$Scaled.dN.dS[gold$Sub > 0], na.rm=TRUE)
+#[1] 3.28176122093
+
+# rsquared of the true dnds vs expected dns when the random forest predicted an error less than 3.2
+predicted_filt <- predicted[sqrt(predicted$oob_pred) <= 3.28176122093, ]
+summary(predicted_filt)
+dim(predicted_filt)
+
+rSquared(y=predicted_filt$dN_minus_dS.Act, resid=(predicted_filt$dN_minus_dS.Act - predicted_filt$dN_minus_dS.Exp))
+# concordance  of the true dnds vs expected dns when the random forest predicted an error less than 3.2
+epi.ccc(predicted_filt$dN_minus_dS.Act, predicted_filt$dN_minus_dS.Exp)$rho.c
+# true r2
+cor(predicted_filt$dN_minus_dS.Act, predicted_filt$dN_minus_dS.Exp)^2
+
+ave_predicted_filt <- ddply(predicted_filt, c("File", "CodonSite"), 
+                       function(x) {
+                         data.frame(Ave.dN_minus_dS.Act = weighted.mean(x$dN_minus_dS.Act, 
+                                                                        x$UnambigCodonRate.Act * x$Reads.Act, na.rm=TRUE),
+                                    dN_minus_dS.Exp = x$dN_minus_dS.Act[1])
+                         })
+dim(ave_predicted_filt)
+
+rSquared(y=ave_predicted_filt$Ave.dN_minus_dS.Act, resid=(ave_predicted_filt$Ave.dN_minus_dS.Act - ave_predicted_filt$dN_minus_dS.Exp))
+# concordance  of the true dnds vs expected dns
+epi.ccc(ave_predicted_filt$Ave.dN_minus_dS.Act, ave_predicted_filt$dN_minus_dS.Exp)$rho.c
+# squared correlation.  ie true r2
+cor(ave_predicted_filt$Ave.dN_minus_dS.Act, ave_predicted_filt$dN_minus_dS.Exp)^2
+
+fig <- ggplot(ave_predicted_filt,   aes(x=dN_minus_dS.Exp, Ave.dN_minus_dS.Act)) + 
+  geom_abline(slope=1, color="red") + 
+  geom_point(alpha=0.4) + 
+  xlab("True dN-dS") + 
+  ylab("Inferred dN-dS") + 
+  theme_bw() + 
+  theme(axis.text=element_text(size=16),
+        axis.title=element_text(size=20)) + 
+  geom_smooth(method="lm", se=FALSE)
+print(fig)
+
+filename <- "/home/thuy/gitrepo/MutationPatterns/tex/longshot/qc/cleaned_umberjack_vs_true.png"
+if (!file.exists(filename)) {
+  ggsave(filename=filename, plot=fig)
+} else {
+  warning(paste0("Not resaving", filename))
+}

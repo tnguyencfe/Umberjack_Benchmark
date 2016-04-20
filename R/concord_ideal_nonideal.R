@@ -23,6 +23,14 @@ summary(ideal)
 head(ideal)
 dim(ideal)
 
+aved_ideal <- read.table("site_ave_dnds_concord_by_dataset.csv", sep=",", header=TRUE)
+aved_ideal <- merge(x=aved_ideal,
+                    y=sims,
+                    by.x=c("File"),
+                    by.y="Name")
+summary(aved_ideal)
+head(aved_ideal)
+dim(aved_ideal)
 
 #' Only `r nrow(ideal)` / `r nrow(sims)`  =  `nrow(ideal) / nrow(sims)` simulated datasets have concordance >= 0.8
 #' 
@@ -56,6 +64,12 @@ total_trees <- sum(unlist(lapply(ideal$TreelenList, length)))
 sum_sub_persite <- sum(Reduce("+", ideal$TreelenList))
 ave_sub_persite <- sum_sub_persite/total_trees
 
+aved_ideal$TreelenList <- sapply(as.character(aved_ideal$TreeLen), function(TreeLen) {strsplit(TreeLen, ",") }, USE.NAMES=FALSE)
+aved_ideal$TreelenList <- lapply(aved_ideal$TreelenList, as.numeric)
+
+total_trees <- sum(unlist(lapply(aved_ideal$TreelenList, length)))
+sum_sub_persite <- sum(Reduce("+", aved_ideal$TreelenList))
+ave_sub_persite <- sum_sub_persite/total_trees
 
 #' Average substitutions per site tree len = `r ave_sub_persite`
 #' 
@@ -90,6 +104,7 @@ print(import)
 
 dnds <- get_all_sim_dnds(dnds_filename)  
 dnds$Is_Ideal <- as.factor(dnds$File %in% ideal$Name)
+dnds$Is_Aved_Ideal <- as.factor(dnds$File %in% aved_ideal$File[aved_ideal$concord_est >= 0.8])
 summary(dnds)
 head(dnds)
 dim(dnds)
