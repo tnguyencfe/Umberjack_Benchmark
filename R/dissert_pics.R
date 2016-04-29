@@ -293,6 +293,7 @@ recombo_window$LogWindow_Subst.Act <- log10(1+recombo_window$Window_Subst.Act)
 #' Show effect of recombination alone on umberjack inaccuracy, highlighting effects of low diversity
 #' 
 #+ fig.width=10, fig.height=7
+
 fig <- ggplot(recombo_window, aes(x=TreeDistPerRead.Act, y=WinSqDist_dn_minus_dS)) + 
   xlab(expression(paste("Normalized ", bar("WRF")))) + 
   ylab(expression(paste("Window Average ", Delta))) + 
@@ -314,6 +315,29 @@ if (file.exists(picname)) {
   ggsave(filename=picname, plot=fig, width=10, height=7, units="in")  
 } 
 
+#' Blow up
+y_limits <- outlier_range(recombo_window$WinSqDist_dn_minus_dS)
+fig <- ggplot(recombo_window, aes(x=TreeDistPerRead.Act, y=WinSqDist_dn_minus_dS)) + 
+  xlab(expression(paste("Normalized ", bar("WRF")))) + 
+  ylab(expression(paste("Window Average ", Delta))) + 
+  theme_bw(base_size=12) + 
+  scale_y_continuous(limits=y_limits) + 
+  geom_point(aes(color=recombo_window$TreeLen.Act)) +                      
+  geom_smooth(method="lm", se=FALSE, color="black", size=2) +                      
+  scale_colour_gradient2(name="Tree\nLength", low="blue", mid="darkgrey", high="red", 
+                         midpoint=quantile(recombo_window$TreeLen.Act, probs=0.5, na.rm=TRUE))  + 
+  theme(axis.title=element_text(size=20), axis.text=element_text(size=20),
+        legend.title=element_text(size=20),
+        legend.text=element_text(size=16),
+        legend.position=c(0.8, 0.3))
+print(fig)
+
+picname <- paste0(THESIS_DIR, "/umberjack/delta_v_recombo_blowup.png")
+if (file.exists(picname)) {
+  warning(paste0("Not replacing ", picname))
+} else {
+  ggsave(filename=picname, plot=fig, width=10, height=7, units="in")  
+} 
 
 #' Show effect of recombination alone on umberjack inaccuracy, highlighting effects of recombination rate
 #' 
@@ -336,6 +360,52 @@ fig <- ggplot(recombo_window, aes(x=TreeDistPerRead.Act, y=WinSqDist_dn_minus_dS
 print(fig)
 
 picname <- paste0(THESIS_DIR, "/umberjack/delta_v_recombo_showRate.png")
+if (file.exists(picname)) {
+  warning(paste0("Not replacing ", picname))
+} else {
+  ggsave(filename=picname, plot=fig, width=10, height=7, units="in")  
+} 
+
+y_limits <- outlier_range(recombo_window$WinSqDist_dn_minus_dS)
+fig <- ggplot(recombo_window, aes(x=TreeDistPerRead.Act, y=WinSqDist_dn_minus_dS)) + 
+  xlab(expression(paste("Normalized ", bar("WRF")))) + 
+  ylab(expression(paste("Window Average ", Delta))) + 
+  theme_bw(base_size=12) + 
+  scale_y_continuous(limits=y_limits) + 
+  geom_point(aes(color=rateFactor), alpha=0.7, size=2) +                      
+  geom_smooth(method="lm", se=FALSE, color="black", size=2) +          
+  scale_color_discrete(name=expression(paste(rho, ", Interval"))) +
+  theme(axis.title=element_text(size=20), axis.text=element_text(size=20),
+        legend.title=element_text(size=20),
+        legend.text=element_text(size=16))
+print(fig)
+
+picname <- paste0(THESIS_DIR, "/umberjack/delta_v_recombo_showRate.png")
+if (file.exists(picname)) {
+  warning(paste0("Not replacing ", picname))
+} else {
+  ggsave(filename=picname, plot=fig, width=10, height=7, units="in")  
+} 
+
+#' For presentation
+y_limits <- outlier_range(recombo_window$WinSqDist_dn_minus_dS)
+fig <- ggplot(recombo_window, aes(x=TreeDistPerRead.Act, y=WinSqDist_dn_minus_dS)) + 
+  #xlab(expression(paste("Normalized ", bar("WRF")))) + 
+  #ylab(expression(paste("Window Average ", Delta))) + 
+  ylab("Mean Squared Error Across Window") + 
+  xlab("Normalized Robinson Foulds Distance") + 
+  theme_bw(base_size=12) + 
+  scale_y_continuous(limits=y_limits) + 
+  geom_point(aes(color=rateFactor), alpha=0.7, size=2) +                      
+  geom_smooth(method="lm", se=FALSE, color="black", size=2) +          
+  #scale_color_discrete(name=expression(paste(rho, ", Interval"))) +
+  scale_color_discrete(name="Recombo Rate,\nBreakpt Interval") +
+  theme(axis.title=element_text(size=20), axis.text=element_text(size=20),
+        legend.title=element_text(size=20),
+        legend.text=element_text(size=18))
+print(fig)
+
+picname <- paste0(THESIS_DIR, "/umberjack/delta_v_recombo_showRate_layman.png")
 if (file.exists(picname)) {
   warning(paste0("Not replacing ", picname))
 } else {
@@ -500,3 +570,8 @@ if (!file.exists(filename)) {
 }
 
 
+
+
+library("party")
+x <- ctree(Species ~ ., data=iris)
+plot(x, type="simple")
